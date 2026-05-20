@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/irisvn/kiro-let-go/internal/antiban"
 	"github.com/irisvn/kiro-let-go/internal/errs"
 )
 
@@ -133,7 +132,21 @@ func (f *Fetcher) fetch(ctx context.Context, acc *Account) (*Quota, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build quota request: %w", err)
 	}
-	req.Header = antiban.BuildKiroRequestHeaders(acc, region)
+	// Use minimal headers for quota endpoint. KiroIDE User-Agent triggers
+	// profileArn requirement on this endpoint, which is unnecessary for quota queries.
+	token := ""
+	if acc.AccessToken != nil {
+		token = *acc.AccessToken
+	} else if acc.APIKey != nil {
+		token = *acc.APIKey
+	}
+	req.Header = http.Header{
+		"Authorization":              {"Bearer " + token},
+		"Content-Type":               {"application/json"},
+		"Connection":                 {"close"},
+		"x-amzn-kiro-agent-mode":     {"vibe"},
+		"x-amzn-codewhisperer-optout": {"true"},
+	}
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {

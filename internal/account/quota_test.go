@@ -43,8 +43,7 @@ func TestQuotaFetcherCacheTTLAndForce(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/getUsageLimits", r.URL.Path)
 		assert.Equal(t, "Bearer "+*acc.APIKey, r.Header.Get("Authorization"))
-		assert.Equal(t, "API_KEY", r.Header.Get("tokentype"))
-		assert.NotEmpty(t, r.Header.Get("amz-sdk-invocation-id"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
 			"subscriptionTitle":"Kiro Pro",
