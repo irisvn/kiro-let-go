@@ -87,7 +87,9 @@ func (rl *RequestLog) Clear() {
 
 func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if rl == nil || !strings.HasPrefix(c.Request.URL.Path, "/v1/") {
+		path := c.Request.URL.Path
+		shouldLog := strings.HasPrefix(path, "/v1/") || strings.Contains(path, "/chat-test") || strings.Contains(path, "/test")
+		if rl == nil || !shouldLog {
 			c.Next()
 			return
 		}
