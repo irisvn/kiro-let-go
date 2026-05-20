@@ -342,6 +342,64 @@
               </template>
             </div>
 
+            <!-- Chat Test -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Chat Test</h3>
+                  <p class="text-xs text-slate-500 mt-1">Sends a minimal real chat request through this account.</p>
+                </div>
+                <button @click="sendChatTest(detailAccount.account.id)"
+                        :disabled="chatTestLoading || !detailAccount.account.enabled || !chatTestModel"
+                        class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors flex items-center gap-2">
+                  <span x-show="chatTestLoading" class="spinner"></span>
+                  <span x-text="chatTestLoading ? 'Sending...' : 'Send Test'"></span>
+                </button>
+              </div>
+              <div class="grid md:grid-cols-3 gap-3">
+                <div class="md:col-span-1">
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Model</label>
+                  <select x-model="chatTestModel" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <template x-for="model in (detailAccount.models && detailAccount.models.models && detailAccount.models.models.length ? detailAccount.models.models : [{model_id: 'claude-haiku-4.5', model_name: 'Claude Haiku 4.5'}])" :key="model.model_id">
+                      <option :value="model.model_id" x-text="(model.model_name || model.model_id) + (model.is_default ? ' (default)' : '')"></option>
+                    </template>
+                  </select>
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Message</label>
+                  <input x-model="chatTestMessage"
+                         @keydown.enter="sendChatTest(detailAccount.account.id)"
+                         class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                         placeholder="Enter test message...">
+                </div>
+              </div>
+              <div x-show="chatTestLoading" class="mt-3 flex items-center gap-2 text-sm text-slate-400">
+                <span class="spinner"></span>
+                Waiting for AI response...
+              </div>
+              <template x-if="chatTestResult">
+                <div class="mt-3 rounded-lg border p-4 text-sm"
+                     :class="chatTestResult.success ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-red-500/40 bg-red-500/5'">
+                  <template x-if="chatTestResult.success">
+                    <div>
+                      <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Success</span>
+                        <span class="text-xs text-slate-500" x-text="chatTestResult.model"></span>
+                        <span class="text-xs text-slate-500" x-text="chatTestResult.duration_ms + ' ms'"></span>
+                      </div>
+                      <div class="whitespace-pre-wrap text-slate-100" x-text="chatTestResult.response || '(empty response)'"></div>
+                    </div>
+                  </template>
+                  <template x-if="!chatTestResult.success">
+                    <div>
+                      <div class="mb-2 inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/30">Error</div>
+                      <div class="text-red-300" x-text="chatTestResult.error || 'Chat test failed'"></div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+
             <!-- Counters -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
               <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Counters</h3>

@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/irisvn/kiro-let-go/internal/account"
+	"github.com/irisvn/kiro-let-go/internal/antiban"
 	"github.com/irisvn/kiro-let-go/internal/kiro"
 	"github.com/irisvn/kiro-let-go/internal/server/middleware"
 )
@@ -144,6 +145,20 @@ type TestAccountResponse struct {
 	DurationMs        int64  `json:"duration_ms"`
 }
 
+type chatTestRequest struct {
+	Model   string `json:"model"`
+	Message string `json:"message"`
+}
+
+type chatTestResponse struct {
+	Success    bool   `json:"success"`
+	Model      string `json:"model"`
+	Message    string `json:"message"`
+	Response   string `json:"response"`
+	DurationMs int64  `json:"duration_ms"`
+	Error      string `json:"error,omitempty"`
+}
+
 type cachedModels struct {
 	response  ListModelsResponse
 	fetchedAt time.Time
@@ -193,6 +208,7 @@ var (
 	patchAccountFields = allowedFields(
 		"label", "enabled", "disabled_reason", "proxy_url", "proxy_username", "proxy_password", "region", "auth_region", "api_region",
 	)
+	chatTestFields = allowedFields("model", "message")
 )
 
 func NewHandler(store accountStore, manager refreshManager, quota quotaFetcher, circuit circuitSnapshotter, quotaTTL time.Duration, dispatcher ...*kiro.Dispatcher) *Handler {
@@ -214,6 +230,7 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.GET("/accounts/:id/quota", h.getAccountQuota)
 	adminGroup.GET("/accounts/:id/models", h.getAccountModels)
 	adminGroup.POST("/accounts/:id/test", h.testAccount)
+	adminGroup.POST("/accounts/:id/chat-test", h.chatTestAccount)
 	adminGroup.GET("/quota", h.getQuotaSummary)
 }
 
@@ -614,6 +631,53 @@ func (h *Handler) testAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *Handler) chatTestAccount(c *gin.Context) {
+	acc, ok := h.loadAccount(c)
+	if !ok {
+		return
+	}
+	if !acc.Enabled {
+		writeError(c, http.StatusBadRequest, "validation_error", "account is disabled")
+		return
+	}
+
+	var req chatTestRequest
+	if _, err := decodeJSONObject(c, chatTestFields, &req); err != nil {
+		writeError(c, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		writeError(c, http.StatusBadRequest, "validation_error", "model is required")
+		return
+	}
+	model = kiro.MapModel(model)
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = "Hi"
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+	acc, ok = h.ensureFreshTokenWithContext(c, ctx, acc)
+	if !ok {
+		return
+	}
+
+	started := time.Now()
+	text, status, kind, err := h.sendChatTest(ctx, acc, model, message)
+	durationMs := time.Since(started).Milliseconds()
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			writeError(c, http.StatusGatewayTimeout, "timeout_error", "chat test timed out after 30 seconds")
+			return
+		}
+		writeError(c, status, kind, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, chatTestResponse{Success: true, Model: model, Message: message, Response: text, DurationMs: durationMs})
+}
+
 func (h *Handler) getCachedModels(accountID string) (ListModelsResponse, bool) {
 	if h == nil {
 		return ListModelsResponse{}, false
@@ -648,6 +712,10 @@ func (h *Handler) setCachedModels(accountID string, resp ListModelsResponse) {
 }
 
 func (h *Handler) ensureFreshToken(c *gin.Context, acc *account.Account) (*account.Account, bool) {
+	return h.ensureFreshTokenWithContext(c, c.Request.Context(), acc)
+}
+
+func (h *Handler) ensureFreshTokenWithContext(c *gin.Context, ctx context.Context, acc *account.Account) (*account.Account, bool) {
 	if acc == nil {
 		writeError(c, http.StatusInternalServerError, "internal_error", "account is nil")
 		return nil, false
@@ -659,7 +727,7 @@ func (h *Handler) ensureFreshToken(c *gin.Context, acc *account.Account) (*accou
 		writeError(c, http.StatusUnauthorized, "authentication_error", "account token is missing or expired and refresh manager is not configured")
 		return nil, false
 	}
-	if err := h.manager.Refresh(c.Request.Context(), acc.ID); err != nil {
+	if err := h.manager.Refresh(ctx, acc.ID); err != nil {
 		status := http.StatusUnauthorized
 		if errors.Is(err, account.ErrNotFound) {
 			status = http.StatusNotFound
@@ -667,7 +735,7 @@ func (h *Handler) ensureFreshToken(c *gin.Context, acc *account.Account) (*accou
 		writeError(c, status, errorTypeForStatus(status), fmt.Sprintf("refresh account: %v", err))
 		return nil, false
 	}
-	refreshed, err := h.store.Get(c.Request.Context(), acc.ID)
+	refreshed, err := h.store.Get(ctx, acc.ID)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, account.ErrNotFound) {
@@ -677,6 +745,85 @@ func (h *Handler) ensureFreshToken(c *gin.Context, acc *account.Account) (*accou
 		return nil, false
 	}
 	return refreshed, true
+}
+
+func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model, message string) (string, int, string, error) {
+	payload := &kiro.KiroPayload{
+		ConversationState: kiro.ConversationState{
+			ConversationID:      uuid.NewString(),
+			AgentContinuationID: uuid.NewString(),
+			AgentTaskType:       "vibe",
+			ChatTriggerType:     "MANUAL",
+			CurrentMessage: kiro.CurrentMessage{
+				UserInputMessage: kiro.UserInputMessage{
+					Content: message,
+					ModelID: model,
+					Origin:  "AI_EDITOR",
+					UserInputMessageContext: &kiro.UserInputMessageContext{
+						Tools: []kiro.Tool{},
+					},
+				},
+			},
+			History: []kiro.HistoryItem{},
+		},
+	}
+	if acc.ProfileARN != nil && strings.TrimSpace(*acc.ProfileARN) != "" {
+		payload.ProfileArn = strings.TrimSpace(*acc.ProfileARN)
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", http.StatusInternalServerError, "internal_error", fmt.Errorf("marshal chat test payload: %w", err)
+	}
+	region := accountAPIRegion(acc)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://q."+region+".amazonaws.com/generateAssistantResponse", bytes.NewReader(body))
+	if err != nil {
+		return "", http.StatusInternalServerError, "internal_error", fmt.Errorf("build chat test request: %w", err)
+	}
+	shadow := *acc
+	token := accountBearerToken(acc)
+	if strings.EqualFold(acc.AuthMethod, "apikey") || strings.EqualFold(acc.AuthMethod, "api_key") {
+		shadow.APIKey = &token
+	} else {
+		shadow.AccessToken = &token
+	}
+	req.Header = antiban.BuildKiroRequestHeaders(&shadow, region)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")
+		}
+		return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("generate assistant response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("read Kiro error response: %w", readErr)
+		}
+		status, kind, msg := classifyKiroHTTPError(resp.StatusCode, respBody)
+		return "", status, kind, fmt.Errorf("generate assistant response: %s", msg)
+	}
+
+	decoder := kiro.NewStreamDecoder(nil)
+	events := decoder.Decode(ctx, resp.Body, body)
+	var text strings.Builder
+	for event := range events {
+		switch e := event.(type) {
+		case kiro.TextDelta:
+			text.WriteString(e.Text)
+		case kiro.ErrorEvent:
+			return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("decode Kiro stream: %w", e.Err)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")
+		}
+		return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("chat test canceled: %w", err)
+	}
+	return text.String(), http.StatusOK, "", nil
 }
 
 func accountNeedsRefresh(acc *account.Account) bool {

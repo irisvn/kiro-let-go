@@ -12,6 +12,10 @@ function app() {
     actionLoading: false,
     quotaLoading: false,
     quotaRefreshing: {},
+    chatTestModel: 'claude-haiku-4.5',
+    chatTestMessage: 'Hi',
+    chatTestLoading: false,
+    chatTestResult: null,
     toasts: [],
     toastId: 0,
     showAddModal: false,
@@ -105,6 +109,14 @@ function app() {
       }
       if (!res.ok) {
         var errText = await res.text();
+        try {
+          var errJSON = JSON.parse(errText);
+          if (errJSON && errJSON.error && errJSON.error.message) {
+            throw new Error(errJSON.error.message);
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof Error && !(parseErr instanceof SyntaxError)) throw parseErr;
+        }
         throw new Error(errText || 'Request failed: ' + res.status);
       }
       if (res.status === 204) return null;
@@ -135,6 +147,10 @@ function app() {
         this.detailAccount.modelsLoading = false;
         this.detailAccount.testLoading = false;
         this.detailAccount.testResult = null;
+        this.chatTestModel = 'claude-haiku-4.5';
+        this.chatTestMessage = 'Hi';
+        this.chatTestLoading = false;
+        this.chatTestResult = null;
         this.currentView = 'detail';
         await this.loadAccountModels(id);
       } catch (e) {
@@ -148,11 +164,23 @@ function app() {
       try {
         var result = await this.apiCall('GET', '/admin/accounts/' + accountId + '/models');
         this.detailAccount.models = result || { models: [] };
+        this.chatTestModel = this.defaultChatTestModel(this.detailAccount.models);
       } catch (e) {
         this.toast('Failed to load models: ' + e.message, 'error');
       } finally {
         this.detailAccount.modelsLoading = false;
       }
+    },
+
+    defaultChatTestModel(modelsResult) {
+      var fallback = 'claude-haiku-4.5';
+      if (!modelsResult) return fallback;
+      if (modelsResult.default_model && modelsResult.default_model.model_id) return modelsResult.default_model.model_id;
+      var models = modelsResult.models || [];
+      for (var i = 0; i < models.length; i++) {
+        if (models[i].is_default && models[i].model_id) return models[i].model_id;
+      }
+      return models.length && models[0].model_id ? models[0].model_id : fallback;
     },
 
     async testAccount(accountId) {
@@ -168,6 +196,24 @@ function app() {
         this.toast('Test failed: ' + e.message, 'error');
       } finally {
         this.detailAccount.testLoading = false;
+      }
+    },
+
+    async sendChatTest(accountId) {
+      this.chatTestLoading = true;
+      this.chatTestResult = null;
+      try {
+        var result = await this.apiCall('POST', '/admin/accounts/' + accountId + '/chat-test', {
+          model: this.chatTestModel,
+          message: this.chatTestMessage
+        });
+        this.chatTestResult = result;
+        this.toast('Chat test completed', 'success');
+      } catch (e) {
+        this.chatTestResult = { success: false, error: e.message };
+        this.toast('Chat test failed: ' + e.message, 'error');
+      } finally {
+        this.chatTestLoading = false;
       }
     },
 
