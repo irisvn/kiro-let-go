@@ -125,8 +125,21 @@ func TestAdminAuthCreateListAndGetRedactsSecrets(t *testing.T) {
 	assert.Equal(t, created.ID, listed[0].ID)
 	assert.NotNil(t, listed[0].RefreshToken)
 	assert.Nil(t, listed[0].ProxyPassword)
+	assert.Equal(t, "closed", listed[0].CircuitState)
 
 	circuit.RecordFailure(created.ID, "quota exhausted")
+	circuit.RecordFailure(created.ID, "quota exhausted")
+	circuit.RecordFailure(created.ID, "quota exhausted")
+	require.NoError(t, store.RecordFailure(context.Background(), created.ID, "quota exhausted"))
+	require.NoError(t, store.RecordFailure(context.Background(), created.ID, "quota exhausted"))
+	require.NoError(t, store.RecordFailure(context.Background(), created.ID, "quota exhausted"))
+	listAfterFailureResp := performAdminRequest(t, router, http.MethodGet, "/admin/accounts", adminAPIKey, nil)
+	require.Equal(t, http.StatusOK, listAfterFailureResp.Code)
+	var listedAfterFailure []accountResponse
+	decodeJSONResponse(t, listAfterFailureResp, &listedAfterFailure)
+	require.Len(t, listedAfterFailure, 1)
+	assert.Equal(t, "open", listedAfterFailure[0].CircuitState)
+
 	getResp := performAdminRequest(t, router, http.MethodGet, "/admin/accounts/"+created.ID, adminAPIKey, nil)
 	require.Equal(t, http.StatusOK, getResp.Code)
 	var detail getAccountResponse
@@ -134,10 +147,21 @@ func TestAdminAuthCreateListAndGetRedactsSecrets(t *testing.T) {
 	assert.Equal(t, created.ID, detail.Account.ID)
 	assert.True(t, detail.CircuitBreaker.Open)
 	assert.Equal(t, "open", detail.CircuitBreaker.State)
-	assert.Equal(t, 1, detail.CircuitBreaker.Failures)
+	assert.Equal(t, 3, detail.CircuitBreaker.Failures)
 	assert.Equal(t, "quota exhausted", detail.CircuitBreaker.LastReason)
 	assert.NotNil(t, detail.Account.RefreshToken)
 	assert.Nil(t, detail.Account.ProxyPassword)
+
+	resetResp := performAdminRequest(t, router, http.MethodPost, "/admin/accounts/"+created.ID+"/reset-circuit", adminAPIKey, nil)
+	require.Equal(t, http.StatusOK, resetResp.Code)
+	var resetDetail getAccountResponse
+	decodeJSONResponse(t, resetResp, &resetDetail)
+	assert.False(t, resetDetail.CircuitBreaker.Open)
+	assert.Equal(t, "closed", resetDetail.CircuitBreaker.State)
+	assert.Equal(t, 0, resetDetail.CircuitBreaker.Failures)
+	stored, err := store.Get(context.Background(), created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, stored.FailureCount)
 }
 
 func TestCreateAccountValidationAndRefreshFailureDisablesAccount(t *testing.T) {

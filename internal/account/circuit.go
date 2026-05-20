@@ -67,7 +67,7 @@ func (cb *CircuitBreaker) IsOpen(accountID string) bool {
 	}
 	cb.mu.RUnlock()
 
-	if !exists || failures == 0 {
+	if !exists || failures < 3 {
 		return false
 	}
 
@@ -93,6 +93,12 @@ func (cb *CircuitBreaker) RecordSuccess(accountID string) {
 	}
 	st.failures = 0
 	st.lastReason = ""
+}
+
+func (cb *CircuitBreaker) Reset(accountID string) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	delete(cb.states, accountID)
 }
 
 func (cb *CircuitBreaker) RecordFailure(accountID string, reason string) {
@@ -129,7 +135,7 @@ func (cb *CircuitBreaker) Snapshot() map[string]CircuitInfo {
 	now := cb.clock()
 	for id, st := range cb.states {
 		cooldown := cb.calculateCooldown(st.failures)
-		open := st.failures > 0 && now.Sub(st.lastFailure) < cooldown
+		open := st.failures >= 3 && now.Sub(st.lastFailure) < cooldown
 		snap[id] = CircuitInfo{
 			AccountID:    id,
 			Failures:     st.failures,
@@ -143,10 +149,10 @@ func (cb *CircuitBreaker) Snapshot() map[string]CircuitInfo {
 }
 
 func (cb *CircuitBreaker) calculateCooldown(failures int) time.Duration {
-	if failures <= 0 {
+	if failures < 3 {
 		return 0
 	}
-	multiplier := 1 << (failures - 1)
+	multiplier := 1 << (failures - 3)
 	multiplier = min(multiplier, cb.cfg.MaxBackoffMultiplier)
 	return cb.cfg.BaseCooldown * time.Duration(multiplier)
 }

@@ -44,11 +44,16 @@ type circuitSnapshotter interface {
 	Snapshot() map[string]account.CircuitInfo
 }
 
+type circuitResetter interface {
+	Reset(accountID string)
+}
+
 type Handler struct {
 	store      accountStore
 	manager    refreshManager
 	quota      quotaFetcher
 	circuit    circuitSnapshotter
+	resetter   circuitResetter
 	dispatch   *kiro.Dispatcher
 	quotaTTL   time.Duration
 	cfg        *config.Config
@@ -94,6 +99,7 @@ type accountResponse struct {
 	DisabledReason *string    `json:"disabled_reason"`
 	FailureCount   int        `json:"failure_count"`
 	LastFailureAt  *time.Time `json:"last_failure_at"`
+	CircuitState   string     `json:"circuit_state,omitempty"`
 	SuccessCount   int        `json:"success_count"`
 	LastUsedAt     *time.Time `json:"last_used_at"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -220,7 +226,11 @@ func NewHandler(store accountStore, manager refreshManager, quota quotaFetcher, 
 	if len(dispatcher) > 0 {
 		dispatch = dispatcher[0]
 	}
-	return &Handler{store: store, manager: manager, quota: quota, circuit: circuit, dispatch: dispatch, quotaTTL: quotaTTL, modelsCache: make(map[string]cachedModels)}
+	h := &Handler{store: store, manager: manager, quota: quota, circuit: circuit, dispatch: dispatch, quotaTTL: quotaTTL, modelsCache: make(map[string]cachedModels)}
+	if resetter, ok := circuit.(circuitResetter); ok {
+		h.resetter = resetter
+	}
+	return h
 }
 
 func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
@@ -231,6 +241,7 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.PATCH("/accounts/:id", h.patchAccount)
 	adminGroup.DELETE("/accounts/:id", h.deleteAccount)
 	adminGroup.POST("/accounts/:id/refresh", h.refreshAccount)
+	adminGroup.POST("/accounts/:id/reset-circuit", h.resetCircuit)
 	adminGroup.GET("/accounts/:id/quota", h.getAccountQuota)
 	adminGroup.GET("/accounts/:id/models", h.getAccountModels)
 	adminGroup.POST("/accounts/:id/test", h.testAccount)
@@ -382,13 +393,20 @@ func (h *Handler) listAccounts(c *gin.Context) {
 		return
 	}
 
+	snapshots := map[string]account.CircuitInfo{}
+	if h.circuit != nil {
+		snapshots = h.circuit.Snapshot()
+	}
+
 	resp := make([]accountResponse, 0, len(accounts))
 	for i := range accounts {
 		externalMethod := externalAuthMethod(accounts[i].AuthMethod)
 		if filterMethod != "" && externalMethod != filterMethod {
 			continue
 		}
-		resp = append(resp, toAccountResponse(&accounts[i], externalMethod))
+		item := toAccountResponse(&accounts[i], externalMethod)
+		item.CircuitState = circuitState(&accounts[i], snapshots)
+		resp = append(resp, item)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -403,10 +421,7 @@ func (h *Handler) getAccount(c *gin.Context) {
 	if h.circuit != nil {
 		if snapshot, found := h.circuit.Snapshot()[acc.ID]; found {
 			info.Open = snapshot.Open
-			info.State = "closed"
-			if snapshot.Open {
-				info.State = "open"
-			}
+			info.State = circuitInfoState(snapshot)
 			info.Failures = snapshot.Failures
 			info.LastReason = snapshot.LastReason
 		}
@@ -415,6 +430,43 @@ func (h *Handler) getAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, getAccountResponse{
 		Account:        toAccountResponse(acc, externalAuthMethod(acc.AuthMethod)),
 		CircuitBreaker: info,
+	})
+}
+
+func (h *Handler) resetCircuit(c *gin.Context) {
+	acc, ok := h.loadAccount(c)
+	if !ok {
+		return
+	}
+	if h.resetter == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "circuit breaker resetter is not configured")
+		return
+	}
+
+	h.resetter.Reset(acc.ID)
+	acc.FailureCount = 0
+	acc.LastFailureAt = nil
+	if err := h.store.Update(c.Request.Context(), acc); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, account.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(c, status, errorTypeForStatus(status), fmt.Sprintf("reset circuit: %v", err))
+		return
+	}
+
+	updated, err := h.store.Get(c.Request.Context(), acc.ID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, account.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(c, status, errorTypeForStatus(status), fmt.Sprintf("load reset account: %v", err))
+		return
+	}
+	c.JSON(http.StatusOK, getAccountResponse{
+		Account:        toAccountResponse(updated, externalAuthMethod(updated.AuthMethod)),
+		CircuitBreaker: circuitBreakerResponse{Open: false, State: "closed", Failures: 0},
 	})
 }
 
@@ -1224,6 +1276,26 @@ func toAccountResponse(acc *account.Account, externalMethod string) accountRespo
 		CreatedAt:      acc.CreatedAt,
 		UpdatedAt:      acc.UpdatedAt,
 	}
+}
+
+func circuitState(acc *account.Account, snapshots map[string]account.CircuitInfo) string {
+	if acc == nil {
+		return "closed"
+	}
+	if snapshot, ok := snapshots[acc.ID]; ok {
+		return circuitInfoState(snapshot)
+	}
+	return "closed"
+}
+
+func circuitInfoState(info account.CircuitInfo) string {
+	if info.Open {
+		return "open"
+	}
+	if info.Failures >= 3 {
+		return "cooldown"
+	}
+	return "closed"
 }
 
 func toQuotaResponse(quota *account.Quota) quotaResponse {

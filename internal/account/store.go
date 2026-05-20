@@ -120,7 +120,7 @@ func NewStore(db *sql.DB) (*Store, error) {
 			api_key = ?, expires_at = ?, profile_arn = ?, region = ?,
 			auth_region = ?, api_region = ?, machine_id = ?, proxy_url = ?,
 			proxy_username = ?, proxy_password = ?, enabled = ?,
-			disabled_reason = ?, updated_at = ?
+			disabled_reason = ?, failure_count = ?, last_failure_at = ?, updated_at = ?
 		WHERE id = ?
 	`)
 	if err != nil {
@@ -325,6 +325,8 @@ func (s *Store) Update(ctx context.Context, acc *Account) error {
 		strPtrToNullString(acc.ProxyPassword),
 		boolToInt(acc.Enabled),
 		strPtrToNullString(acc.DisabledReason),
+		acc.FailureCount,
+		timePtrToNullString(acc.LastFailureAt),
 		acc.UpdatedAt.Format(time.RFC3339),
 		acc.ID,
 	)

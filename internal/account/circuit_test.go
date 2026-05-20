@@ -23,9 +23,13 @@ func TestCircuitBreakerIsOpenNoFailures(t *testing.T) {
 	assert.False(t, cb.IsOpen("acc1"))
 }
 
-func TestCircuitBreakerIsOpenAfterFailure(t *testing.T) {
+func TestCircuitBreakerIsOpenAfterThreeFailures(t *testing.T) {
 	now := time.Now()
 	cb := newTestCircuitBreaker(now)
+	cb.RecordFailure("acc1", "timeout")
+	assert.False(t, cb.IsOpen("acc1"))
+	cb.RecordFailure("acc1", "timeout")
+	assert.False(t, cb.IsOpen("acc1"))
 	cb.RecordFailure("acc1", "timeout")
 	assert.True(t, cb.IsOpen("acc1"))
 }
@@ -33,6 +37,8 @@ func TestCircuitBreakerIsOpenAfterFailure(t *testing.T) {
 func TestCircuitBreakerIsOpenCooldownExpires(t *testing.T) {
 	now := time.Now()
 	cb := newTestCircuitBreaker(now)
+	cb.RecordFailure("acc1", "timeout")
+	cb.RecordFailure("acc1", "timeout")
 	cb.RecordFailure("acc1", "timeout")
 	assert.True(t, cb.IsOpen("acc1"))
 
@@ -46,6 +52,8 @@ func TestCircuitBreakerExponentialBackoff(t *testing.T) {
 	cb := newTestCircuitBreaker(now)
 
 	cb.RecordFailure("acc1", "err1")
+	cb.RecordFailure("acc1", "err2")
+	cb.RecordFailure("acc1", "err3")
 	assert.True(t, cb.IsOpen("acc1"))
 
 	now = now.Add(30 * time.Second)
@@ -56,7 +64,7 @@ func TestCircuitBreakerExponentialBackoff(t *testing.T) {
 	cb.clock = func() time.Time { return now }
 	assert.False(t, cb.IsOpen("acc1"))
 
-	cb.RecordFailure("acc1", "err2")
+	cb.RecordFailure("acc1", "err4")
 	assert.True(t, cb.IsOpen("acc1"))
 
 	now = now.Add(time.Minute)
@@ -89,6 +97,8 @@ func TestCircuitBreakerRecordSuccess(t *testing.T) {
 	now := time.Now()
 	cb := newTestCircuitBreaker(now)
 	cb.RecordFailure("acc1", "timeout")
+	cb.RecordFailure("acc1", "timeout")
+	cb.RecordFailure("acc1", "timeout")
 	assert.True(t, cb.IsOpen("acc1"))
 
 	cb.RecordSuccess("acc1")
@@ -112,6 +122,10 @@ func TestCircuitBreakerReason(t *testing.T) {
 	assert.Equal(t, "", cb.Reason("acc1"))
 
 	cb.RecordFailure("acc1", "connection refused")
+	assert.Equal(t, "", cb.Reason("acc1"))
+	cb.RecordFailure("acc1", "connection refused")
+	assert.Equal(t, "", cb.Reason("acc1"))
+	cb.RecordFailure("acc1", "connection refused")
 	assert.Equal(t, "connection refused", cb.Reason("acc1"))
 
 	now = now.Add(2 * time.Minute)
@@ -123,6 +137,8 @@ func TestCircuitBreakerSnapshot(t *testing.T) {
 	now := time.Now()
 	cb := newTestCircuitBreaker(now)
 	cb.RecordFailure("acc1", "err1")
+	cb.RecordFailure("acc1", "err1")
+	cb.RecordFailure("acc1", "err1")
 	cb.RecordFailure("acc2", "err2")
 	cb.RecordSuccess("acc3")
 
@@ -130,7 +146,7 @@ func TestCircuitBreakerSnapshot(t *testing.T) {
 	require.Len(t, snap, 3)
 
 	assert.Equal(t, "acc1", snap["acc1"].AccountID)
-	assert.Equal(t, 1, snap["acc1"].Failures)
+	assert.Equal(t, 3, snap["acc1"].Failures)
 	assert.Equal(t, "err1", snap["acc1"].LastReason)
 	assert.True(t, snap["acc1"].Open)
 	assert.Equal(t, now.Add(time.Minute), snap["acc1"].CooldownEnds)
@@ -138,7 +154,7 @@ func TestCircuitBreakerSnapshot(t *testing.T) {
 	assert.Equal(t, "acc2", snap["acc2"].AccountID)
 	assert.Equal(t, 1, snap["acc2"].Failures)
 	assert.Equal(t, "err2", snap["acc2"].LastReason)
-	assert.True(t, snap["acc2"].Open)
+	assert.False(t, snap["acc2"].Open)
 
 	assert.Equal(t, "acc3", snap["acc3"].AccountID)
 	assert.Equal(t, 0, snap["acc3"].Failures)
@@ -153,7 +169,20 @@ func TestCircuitBreakerSeed(t *testing.T) {
 
 	st := cb.Snapshot()["acc1"]
 	assert.Equal(t, 3, st.Failures)
-	assert.Equal(t, now.Add(4*time.Minute), st.CooldownEnds)
+	assert.Equal(t, now.Add(time.Minute), st.CooldownEnds)
+}
+
+func TestCircuitBreakerReset(t *testing.T) {
+	now := time.Now()
+	cb := newTestCircuitBreaker(now)
+	cb.RecordFailure("acc1", "err")
+	cb.RecordFailure("acc1", "err")
+	cb.RecordFailure("acc1", "err")
+	require.Contains(t, cb.Snapshot(), "acc1")
+
+	cb.Reset("acc1")
+	assert.False(t, cb.IsOpen("acc1"))
+	assert.NotContains(t, cb.Snapshot(), "acc1")
 }
 
 func TestCircuitBreakerProbabilisticRetryAlways(t *testing.T) {
@@ -163,6 +192,8 @@ func TestCircuitBreakerProbabilisticRetryAlways(t *testing.T) {
 		MaxBackoffMultiplier:     8,
 		ProbabilisticRetryChance: 1.0,
 	}, func() time.Time { return now })
+	cb.RecordFailure("acc1", "err")
+	cb.RecordFailure("acc1", "err")
 	cb.RecordFailure("acc1", "err")
 	assert.False(t, cb.IsOpen("acc1"))
 }
@@ -175,6 +206,8 @@ func TestCircuitBreakerProbabilisticRetryNever(t *testing.T) {
 		ProbabilisticRetryChance: 0.0,
 	}, func() time.Time { return now })
 	cb.RecordFailure("acc1", "err")
+	cb.RecordFailure("acc1", "err")
+	cb.RecordFailure("acc1", "err")
 	assert.True(t, cb.IsOpen("acc1"))
 }
 
@@ -185,6 +218,8 @@ func TestCircuitBreakerProbabilisticRetryDistribution(t *testing.T) {
 		MaxBackoffMultiplier:     8,
 		ProbabilisticRetryChance: 0.1,
 	}, func() time.Time { return now })
+	cb.RecordFailure("acc1", "err")
+	cb.RecordFailure("acc1", "err")
 	cb.RecordFailure("acc1", "err")
 
 	openCount := 0

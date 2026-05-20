@@ -10,6 +10,7 @@ export interface Account {
   enabled: boolean
   disabled_reason: string
   failure_count: number
+  circuit_state?: string
   success_count: number
   last_used_at: string | null
   last_failure_at: string | null
@@ -93,6 +94,7 @@ interface AccountsState {
   addAccount: (form: AddAccountForm) => Promise<{ verified?: boolean; verification_error?: string } | null>
   editAccount: (form: EditAccountForm) => Promise<void>
   forceRefresh: (id: string) => Promise<void>
+  resetCircuit: (id: string) => Promise<void>
   setChatTestModel: (model: string) => void
   setChatTestMessage: (message: string) => void
   clearDetail: () => void
@@ -275,6 +277,18 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       set({ detailAccount: detail })
     } catch (e) {
       throw new Error('Refresh failed: ' + handleApiError(e))
+    } finally {
+      set({ actionLoading: false })
+    }
+  },
+
+  resetCircuit: async (id) => {
+    set({ actionLoading: true })
+    try {
+      const detail = await apiCall<AccountDetail>('POST', `/admin/accounts/${id}/reset-circuit`)
+      set({ detailAccount: detail })
+    } catch (e) {
+      throw new Error('Reset circuit failed: ' + handleApiError(e))
     } finally {
       set({ actionLoading: false })
     }

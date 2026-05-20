@@ -22,6 +22,7 @@ export function AccountDetailPage() {
   const testAccount = useAccountsStore((s) => s.testAccount)
   const sendChatTest = useAccountsStore((s) => s.sendChatTest)
   const forceRefresh = useAccountsStore((s) => s.forceRefresh)
+  const resetCircuit = useAccountsStore((s) => s.resetCircuit)
   const editAccount = useAccountsStore((s) => s.editAccount)
   const deleteAccount = useAccountsStore((s) => s.deleteAccount)
   const setChatTestModel = useAccountsStore((s) => s.setChatTestModel)
@@ -74,6 +75,17 @@ export function AccountDetailPage() {
     try {
       await forceRefresh(id)
       toast('Token refresh initiated', 'success')
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
+  }
+
+  const handleResetCircuit = async () => {
+    if (!id) return
+    try {
+      await resetCircuit(id)
+      toast('Circuit reset', 'success')
+      await openDetail(id)
     } catch (e) {
       toast((e as Error).message, 'error')
     }
@@ -166,11 +178,23 @@ export function AccountDetailPage() {
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Circuit Breaker</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Circuit Breaker</h3>
+          {(cb.open || cb.failures > 0) && (
+            <button
+              onClick={handleResetCircuit}
+              disabled={actionLoading}
+              className="bg-amber-600/20 hover:bg-amber-600/30 disabled:opacity-50 text-amber-300 text-xs font-medium rounded-lg px-3 py-1.5 transition-colors border border-amber-500/30 flex items-center gap-2"
+            >
+              {actionLoading && <span className="spinner spinner-sm" />}
+              Reset Circuit
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           <div>
             <span className="text-slate-500 text-xs block">State</span>
-            <span className={`font-medium ${cb.open ? 'text-red-400' : 'text-emerald-400'}`}>{cb.state}</span>
+            <span className={`font-medium ${cb.open ? 'text-red-400' : cb.state === 'cooldown' ? 'text-amber-400' : 'text-emerald-400'}`}>{cb.state}</span>
           </div>
           <div>
             <span className="text-slate-500 text-xs block">Failures</span>

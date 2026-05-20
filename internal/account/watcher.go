@@ -435,6 +435,8 @@ func updateAccountTx(ctx context.Context, tx *sql.Tx, store *Store, acc *Account
 		strPtrToNullString(acc.ProxyPassword),
 		boolToInt(acc.Enabled),
 		strPtrToNullString(acc.DisabledReason),
+		acc.FailureCount,
+		timePtrToNullString(acc.LastFailureAt),
 		acc.UpdatedAt.Format(time.RFC3339),
 		acc.ID,
 	)

@@ -122,6 +122,7 @@ export function AccountsPage() {
               <th className="px-4 py-3 font-medium">Label</th>
               <th className="px-4 py-3 font-medium">Auth</th>
               <th className="px-4 py-3 font-medium">Region</th>
+              <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Enabled</th>
               <th className="px-4 py-3 font-medium text-right">Failures</th>
               <th className="px-4 py-3 font-medium text-right">Successes</th>
@@ -152,6 +153,7 @@ export function AccountsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-slate-300 font-mono text-xs">{acc.region || '-'}</td>
+                <td className="px-4 py-3"><AccountStatusBadge account={acc} /></td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() => handleToggleEnabled(acc)}
@@ -189,7 +191,7 @@ export function AccountsPage() {
             ))}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">No accounts found</td>
+                <td colSpan={9} className="px-4 py-8 text-center text-slate-500">No accounts found</td>
               </tr>
             )}
           </tbody>
@@ -269,6 +271,31 @@ export function AccountsPage() {
         </ModalOverlay>
       )}
     </div>
+  )
+}
+
+function AccountStatusBadge({ account }: { account: Account }) {
+  if (!account.enabled) {
+    return <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-slate-500/15 text-slate-400 border border-slate-500/30">Disabled</span>
+  }
+  if (account.circuit_state === 'open') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+        Circuit Open{account.failure_count > 0 ? ` (${account.failure_count})` : ''}
+      </span>
+    )
+  }
+  if (account.circuit_state === 'cooldown') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+        Cooldown{account.failure_count > 0 ? ` (${account.failure_count})` : ''}
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+      Active{account.failure_count > 0 ? ` (${account.failure_count} failures)` : ''}
+    </span>
   )
 }
 
