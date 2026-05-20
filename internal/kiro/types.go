@@ -1,6 +1,9 @@
 package kiro
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 const (
 	ModelClaudeSonnet45 = "claude-sonnet-4.5"
@@ -12,18 +15,20 @@ const (
 )
 
 func MapModel(input string) string {
-	switch input {
-	case "sonnet-4.5", "claude-sonnet-4.5":
+	normalized := normalizeModelInput(input)
+
+	switch normalized {
+	case "claude-sonnet-4.5", "sonnet-4.5", "sonnet-4-5":
 		return ModelClaudeSonnet45
-	case "sonnet-4.6", "claude-sonnet-4.6":
+	case "claude-sonnet-4.6", "sonnet-4.6", "sonnet-4-6":
 		return ModelClaudeSonnet46
-	case "opus-4.5", "claude-opus-4.5":
+	case "claude-opus-4.5", "opus-4.5", "opus-4-5":
 		return ModelClaudeOpus45
-	case "opus-4.6", "claude-opus-4.6":
+	case "claude-opus-4.6", "opus-4.6", "opus-4-6":
 		return ModelClaudeOpus46
-	case "opus-4.7", "claude-opus-4.7":
+	case "claude-opus-4.7", "opus-4.7", "opus-4-7":
 		return ModelClaudeOpus47
-	case "haiku-4.5", "claude-haiku-4.5":
+	case "claude-haiku-4.5", "haiku-4.5", "haiku-4-5":
 		return ModelClaudeHaiku45
 	case "sonnet":
 		return ModelClaudeSonnet46
@@ -34,6 +39,41 @@ func MapModel(input string) string {
 	default:
 		return input
 	}
+}
+
+func normalizeModelInput(input string) string {
+	s := strings.ToLower(strings.TrimSpace(input))
+
+	for _, prefix := range []string{"kiro/", "anthropic/", "openai/", "claude/", "aws/"} {
+		s = strings.TrimPrefix(s, prefix)
+	}
+
+	s = strings.ReplaceAll(s, "_", "-")
+
+	parts := strings.SplitN(s, "-", -1)
+	if len(parts) >= 3 {
+		last := parts[len(parts)-1]
+		secondLast := parts[len(parts)-2]
+		if isVersionPart(secondLast) && isVersionPart(last) {
+			parts[len(parts)-2] = secondLast + "." + last
+			parts = parts[:len(parts)-1]
+			s = strings.Join(parts, "-")
+		}
+	}
+
+	return s
+}
+
+func isVersionPart(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, c := range s {
+		if c != '.' && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 type KiroPayload struct {
