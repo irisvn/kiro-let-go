@@ -1,6 +1,8 @@
 # kiro-let-go
 
-A proxy server that load-balances requests across multiple Kiro AI accounts. It speaks the OpenAI and Anthropic API formats, so you can drop it into existing clients without changing code.
+## What is this?
+
+A Go-based gateway proxy that fronts multiple Kiro AI accounts, exposing OpenAI- and Anthropic-compatible APIs with multi-account failover, anti-ban protections, and quota inspection. It load-balances requests across accounts, recovers from failures automatically, and resists Kiro's ban-detection mechanisms — so you can drop it into existing clients without changing code.
 
 ## Build
 

@@ -1896,7 +1896,7 @@ Verifiable conditions (commands an agent can run):
 
 ### Wave 7 — CLI + Wire-up
 
-- [ ] **T37. cobra CLI commands**
+- [x] **T37. cobra CLI commands**
 
   **What to do**:
   - Implement `cmd/cli/main.go` and `internal/cli/*.go` using `spf13/cobra`:
@@ -1960,7 +1960,7 @@ Verifiable conditions (commands an agent can run):
 
   **Commit**: YES | Message: `feat(cli): cobra-based account management commands (T37)` | Files: cmd/cli/main.go, internal/cli/**
 
-- [ ] **T38. cmd/server/main.go wire-up + graceful shutdown**
+- [x] **T38. cmd/server/main.go wire-up + graceful shutdown**
 
   **What to do**:
   - Implement `cmd/server/main.go`:
@@ -2031,7 +2031,7 @@ Verifiable conditions (commands an agent can run):
 
   **Commit**: YES | Message: `feat(server): main entry with graceful shutdown and watcher (T38)` | Files: cmd/server/main.go
 
-- [ ] **T39. cmd/cli/main.go wire-up**
+- [x] **T39. cmd/cli/main.go wire-up**
 
   **What to do**:
   - Implement `cmd/cli/main.go` thin shim:
@@ -2064,7 +2064,7 @@ Verifiable conditions (commands an agent can run):
 
   **Commit**: YES | Message: `feat(cli): main entry with version subcommand (T39)` | Files: cmd/cli/main.go
 
-- [ ] **T40. Configuration examples + README**
+- [x] **T40. Configuration examples + README**
 
   **What to do**:
   - Create `configs/config.example.json` with all fields from T2 documented inline (using `// json:hint` style or a sibling `config.example.md`):

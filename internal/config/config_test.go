@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
@@ -159,4 +160,21 @@ func TestLoad_AllNestedDefaults(t *testing.T) {
 	assert.Empty(t, cfg.Storage.CredentialsJSONPath)
 	assert.Equal(t, "us-east-1", cfg.Kiro.AuthRegion)
 	assert.Equal(t, "us-east-1", cfg.Kiro.APIRegion)
+}
+
+func TestExampleConfigLoads(t *testing.T) {
+	examplePath := filepath.Join("..", "..", "configs", "config.example.json")
+	content, err := os.ReadFile(examplePath)
+	require.NoError(t, err)
+
+	loaded := strings.ReplaceAll(string(content), "REPLACE_ME_ADMIN", "admin-key")
+	loaded = strings.ReplaceAll(loaded, "REPLACE_ME_PROXY", "proxy-key")
+
+	tmpDir := t.TempDir()
+	tmpPath := filepath.Join(tmpDir, "config.json")
+	require.NoError(t, os.WriteFile(tmpPath, []byte(loaded), 0o644))
+
+	cfg, err := Load(tmpPath)
+	require.NoError(t, err)
+	require.NoError(t, cfg.Validate())
 }
