@@ -170,7 +170,29 @@
           <div>
             <!-- Account fields -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
-              <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Account Info</h3>
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Account Info</h3>
+                <div x-show="detailAccount.account.auth_method === 'social'">
+                  <template x-if="!detailAccount.account.access_token">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/30">No Token</span>
+                  </template>
+                  <template x-if="detailAccount.account.access_token && detailAccount.account.expires_at && new Date(detailAccount.account.expires_at) < new Date()">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/30">Token Expired</span>
+                  </template>
+                  <template x-if="detailAccount.account.access_token && detailAccount.account.expires_at && new Date(detailAccount.account.expires_at) >= new Date()">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                          x-text="'Token Valid (' + Math.ceil((new Date(detailAccount.account.expires_at) - new Date()) / 60000) + ' min)'"></span>
+                  </template>
+                </div>
+                <div x-show="detailAccount.account.auth_method === 'apikey'">
+                  <template x-if="detailAccount.account.api_key">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">API Key Set</span>
+                  </template>
+                  <template x-if="!detailAccount.account.api_key">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/30">No API Key</span>
+                  </template>
+                </div>
+              </div>
               <div class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
                 <template x-for="field in [
                   {label:'ID', key:'id'},
@@ -343,9 +365,32 @@
               <!-- Overage info -->
               <template x-if="q.overage_cap != null && q.overage_cap > 0">
                 <div class="mt-3 pt-3 border-t border-slate-800">
-                  <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-500">Overage Cap</span>
-                    <span class="text-slate-300 font-mono" x-text="q.overage_cap.toLocaleString() + ' credits'"></span>
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span class="text-slate-500">Overage Cap</span>
+                      <span class="text-slate-300 font-mono block" x-text="q.overage_cap.toLocaleString() + ' credits'"></span>
+                    </div>
+                    <div>
+                      <span class="text-slate-500">Overage Rate</span>
+                      <span class="text-slate-300 font-mono block" x-text="q.overage_rate != null ? ('$' + q.overage_rate.toFixed(2) + '/' + (q.currency || 'credit')) : '-'"></span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Reset info -->
+              <template x-if="q.reset_time">
+                <div class="mt-3 pt-3 border-t border-slate-800">
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span class="text-slate-500">Resets On</span>
+                      <span class="text-slate-300 block" x-text="new Date(q.reset_time).toLocaleDateString()"></span>
+                    </div>
+                    <div>
+                      <span class="text-slate-500">Days Remaining</span>
+                      <span class="font-mono block" :class="Math.ceil((new Date(q.reset_time) - new Date()) / 86400000) <= 3 ? 'text-amber-400' : 'text-slate-300'"
+                            x-text="Math.max(0, Math.ceil((new Date(q.reset_time) - new Date()) / 86400000)) + ' days'"></span>
+                    </div>
                   </div>
                 </div>
               </template>

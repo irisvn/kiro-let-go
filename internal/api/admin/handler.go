@@ -124,6 +124,9 @@ type quotaSummaryResponse struct {
 	LimitRemaining    *int64     `json:"limit_remaining"`
 	CurrentUsage      *int64     `json:"current_usage"`
 	OverageCap        *int64     `json:"overage_cap"`
+	OverageRate       *float64   `json:"overage_rate"`
+	Currency          *string    `json:"currency"`
+	ResetTime         *time.Time `json:"reset_time"`
 	FetchedAt         *time.Time `json:"fetched_at"`
 	Stale             bool       `json:"stale"`
 }
@@ -520,6 +523,11 @@ func (h *Handler) getQuotaSummary(c *gin.Context) {
 			entry.LimitRemaining = int64Ptr(item.Quota.LimitRemaining)
 			entry.CurrentUsage = int64Ptr(item.Quota.CurrentUsage)
 			entry.OverageCap = int64Ptr(item.Quota.OverageCap)
+			entry.OverageRate = float64Ptr(item.Quota.OverageRate)
+			entry.Currency = stringPtr(item.Quota.Currency)
+			if !item.Quota.ResetTime.IsZero() {
+				entry.ResetTime = timePtr(item.Quota.ResetTime)
+			}
 			entry.FetchedAt = timePtr(item.Quota.FetchedAt)
 			entry.Stale = h.quotaTTL > 0 && time.Since(item.Quota.FetchedAt.UTC()) > h.quotaTTL
 			if h.quotaTTL <= 0 {
@@ -741,6 +749,10 @@ func stringPtr(value string) *string {
 }
 
 func int64Ptr(value int64) *int64 {
+	return &value
+}
+
+func float64Ptr(value float64) *float64 {
 	return &value
 }
 
