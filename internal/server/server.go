@@ -12,6 +12,7 @@ import (
 	"github.com/irisvn/kiro-let-go/internal/account"
 	"github.com/irisvn/kiro-let-go/internal/antiban"
 	"github.com/irisvn/kiro-let-go/internal/api/admin"
+	"github.com/irisvn/kiro-let-go/internal/api/adminui"
 	"github.com/irisvn/kiro-let-go/internal/api/anthropic"
 	"github.com/irisvn/kiro-let-go/internal/api/openai"
 	"github.com/irisvn/kiro-let-go/internal/config"
@@ -74,6 +75,8 @@ func New(deps Deps) *Server {
 		time.Duration(deps.Cfg.Quota.CacheTTLSeconds)*time.Second,
 	)
 	admin.RegisterRoutes(r, deps.Cfg.Server.AdminAPIKey, adminHandler)
+
+	adminui.RegisterRoutes(r)
 
 	return &Server{
 		engine:       r,

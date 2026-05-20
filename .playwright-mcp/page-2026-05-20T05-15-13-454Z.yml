@@ -1,0 +1,11 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img [ref=e6]
+    - heading "kiro-let-go" [level=1] [ref=e8]
+    - paragraph [ref=e9]: Administration Console
+  - generic [ref=e10]:
+    - generic [ref=e11]: Admin API Key
+    - textbox "Enter your admin API key" [ref=e12]: wrong-key
+    - generic [ref=e15]: Invalid API key
+    - button "Login" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: Login

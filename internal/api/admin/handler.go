@@ -134,7 +134,7 @@ var (
 		"auth_region", "api_region", "proxy_url", "proxy_username", "proxy_password", "enabled",
 	)
 	patchAccountFields = allowedFields(
-		"label", "enabled", "proxy_url", "proxy_username", "proxy_password", "region", "auth_region", "api_region",
+		"label", "enabled", "disabled_reason", "proxy_url", "proxy_username", "proxy_password", "region", "auth_region", "api_region",
 	)
 )
 
@@ -350,6 +350,13 @@ func (h *Handler) patchAccount(c *gin.Context) {
 		return
 	} else if present {
 		acc.Enabled = value
+	}
+
+	if value, present, err := nullableStringField(raw, "disabled_reason"); err != nil {
+		writeError(c, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	} else if present {
+		acc.DisabledReason = value
 	}
 
 	if value, present, err := nullableStringField(raw, "proxy_url"); err != nil {
