@@ -4,6 +4,8 @@ bin/
 *.log
 .env
 vendor/
+web/node_modules/
+internal/api/adminui/dist/
 
 # IDE / editor artifacts
 .idea/

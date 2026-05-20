@@ -45,6 +45,7 @@ type Server struct {
 
 func New(deps Deps) *Server {
 	r := gin.New()
+	r.RedirectTrailingSlash = false
 
 	r.Use(
 		antiban.HealthProbeMiddleware(),

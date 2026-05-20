@@ -4,35 +4,51 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed templates/* static/*
+//go:embed dist/*
 var assets embed.FS
 
-// RegisterRoutes adds admin UI asset routes to the given gin engine.
-// These routes are intentionally public (no auth middleware) so the
-// login page can render before the user has provided an API key.
 func RegisterRoutes(r *gin.Engine) {
-	r.GET("/admin/ui", serveIndex)
-	r.GET("/admin/ui/", serveIndex)
-
-	staticSub, err := fs.Sub(assets, "static")
+	distSub, err := fs.Sub(assets, "dist")
 	if err != nil {
 		panic("adminui: failed to create sub filesystem: " + err.Error())
 	}
-	staticServer := http.StripPrefix("/admin/ui/static", http.FileServer(http.FS(staticSub)))
-	r.GET("/admin/ui/static/*filepath", func(c *gin.Context) {
-		staticServer.ServeHTTP(c.Writer, c.Request)
-	})
-}
 
-func serveIndex(c *gin.Context) {
-	data, err := assets.ReadFile("templates/index.html")
+	indexHTML, err := fs.ReadFile(distSub, "index.html")
 	if err != nil {
-		c.String(http.StatusInternalServerError, "admin UI template not found")
-		return
+		panic("adminui: index.html not found in dist: " + err.Error())
 	}
-	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+
+	fileServer := http.StripPrefix("/admin/ui/", http.FileServer(http.FS(distSub)))
+
+	handler := func(c *gin.Context) {
+		path := c.Request.URL.Path
+		relPath := strings.TrimPrefix(path, "/admin/ui/")
+
+		if relPath != "" && relPath != "/" {
+			if f, err := distSub.Open(relPath); err == nil {
+				f.Close()
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				return
+			}
+		}
+
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
+	}
+
+	r.GET("/admin/ui", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/admin/ui/")
+	})
+
+	r.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/admin/ui/") {
+			handler(c)
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	})
 }
