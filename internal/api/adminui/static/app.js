@@ -294,7 +294,7 @@ function app() {
     },
 
     async refreshQuota(accountId) {
-      this.$set(this.quotaRefreshing, accountId, true);
+      this.quotaRefreshing = Object.assign({}, this.quotaRefreshing, { [accountId]: true });
       try {
         var result = await this.apiCall('GET', '/admin/accounts/' + accountId + '/quota?force=true');
         if (result) {
@@ -315,7 +315,7 @@ function app() {
       } catch (e) {
         this.toast('Failed to refresh quota: ' + e.message, 'error');
       } finally {
-        this.$set(this.quotaRefreshing, accountId, false);
+        this.quotaRefreshing = Object.assign({}, this.quotaRefreshing, { [accountId]: false });
       }
     },
 
