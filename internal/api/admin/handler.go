@@ -769,6 +769,8 @@ func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model,
 	}
 	if acc.ProfileARN != nil && strings.TrimSpace(*acc.ProfileARN) != "" {
 		payload.ProfileArn = strings.TrimSpace(*acc.ProfileARN)
+	} else if strings.EqualFold(acc.AuthMethod, "social") {
+		payload.ProfileArn = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK"
 	}
 
 	body, err := json.Marshal(payload)
@@ -788,8 +790,15 @@ func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model,
 		shadow.AccessToken = &token
 	}
 	req.Header = antiban.BuildKiroRequestHeaders(&shadow, region)
+	req.Header.Set("Accept", "application/vnd.amazon.eventstream")
 
-	resp, err := http.DefaultClient.Do(req)
+	chatClient := &http.Client{Transport: &http.Transport{
+		DisableCompression: true,
+		DisableKeepAlives:  true,
+		ForceAttemptHTTP2:  true,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}}
+	resp, err := chatClient.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return "", http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")

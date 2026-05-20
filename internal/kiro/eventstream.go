@@ -18,7 +18,7 @@ const (
 	maxEventStreamFrame   = 16 << 20
 )
 
-var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
+var crc32cTable = crc32.IEEETable
 
 // Parser incrementally decodes AWS Event Stream frames from chunked input.
 type Parser struct {
