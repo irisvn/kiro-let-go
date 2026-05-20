@@ -215,10 +215,17 @@ function app() {
       if (this.addForm.profile_arn) payload.profile_arn = this.addForm.profile_arn;
       if (this.addForm.proxy_url) payload.proxy_url = this.addForm.proxy_url;
       try {
-        await this.apiCall('POST', '/admin/accounts', payload);
+        var result = await this.apiCall('POST', '/admin/accounts', payload);
         this.showAddModal = false;
-        this.toast('Account created', 'success');
+        if (result && result.verified) {
+          this.toast('Account created and verified successfully', 'success');
+        } else if (result && !result.verified) {
+          this.toast('Account created but verification failed: ' + (result.verification_error || 'unknown error') + '. Account has been disabled.', 'warning');
+        } else {
+          this.toast('Account created', 'success');
+        }
         await this.loadAccounts();
+        await this.loadQuota();
       } catch (e) {
         this.toast('Failed to create: ' + e.message, 'error');
       } finally {

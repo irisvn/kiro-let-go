@@ -102,6 +102,12 @@ type getAccountResponse struct {
 	CircuitBreaker circuitBreakerResponse `json:"circuit_breaker"`
 }
 
+type createAccountResponse struct {
+	Account           accountResponse `json:"account"`
+	Verified          bool            `json:"verified"`
+	VerificationError string          `json:"verification_error,omitempty"`
+}
+
 type quotaResponse struct {
 	SubscriptionTitle string          `json:"subscription_title"`
 	LimitTotal        int64           `json:"limit_total"`
@@ -248,10 +254,19 @@ func (h *Handler) createAccount(c *gin.Context) {
 		}
 		if err := h.manager.Refresh(c.Request.Context(), acc.ID); err != nil {
 			reason := fmt.Sprintf("refresh failed: %v", err)
-			if setErr := h.store.SetEnabled(c.Request.Context(), acc.ID, false, &reason); setErr != nil {
-				writeError(c, http.StatusInternalServerError, "internal_error", fmt.Sprintf("disable account after refresh failure: %v", setErr))
+			_ = h.store.SetEnabled(c.Request.Context(), acc.ID, false, &reason)
+			created, getErr := h.store.Get(c.Request.Context(), acc.ID)
+			if getErr != nil {
+				writeError(c, http.StatusInternalServerError, "internal_error", fmt.Sprintf("load created account: %v", getErr))
 				return
 			}
+			created.AuthMethod = method
+			c.JSON(http.StatusCreated, createAccountResponse{
+				Account:            toAccountResponse(created, externalMethod),
+				Verified:           false,
+				VerificationError:  reason,
+			})
+			return
 		}
 	}
 
@@ -261,7 +276,10 @@ func (h *Handler) createAccount(c *gin.Context) {
 		return
 	}
 	created.AuthMethod = method
-	c.JSON(http.StatusCreated, toAccountResponse(created, externalMethod))
+	c.JSON(http.StatusCreated, createAccountResponse{
+		Account:  toAccountResponse(created, externalMethod),
+		Verified: true,
+	})
 }
 
 func (h *Handler) listAccounts(c *gin.Context) {

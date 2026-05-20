@@ -101,8 +101,11 @@ func TestAdminAuthCreateListAndGetRedactsSecrets(t *testing.T) {
 	createdResp := performAdminRequest(t, router, http.MethodPost, "/admin/accounts", adminAPIKey, body)
 	require.Equal(t, http.StatusCreated, createdResp.Code)
 
-	var created accountResponse
-	decodeJSONResponse(t, createdResp, &created)
+	var createResp createAccountResponse
+	decodeJSONResponse(t, createdResp, &createResp)
+	assert.True(t, createResp.Verified)
+	assert.Empty(t, createResp.VerificationError)
+	created := createResp.Account
 	assert.Equal(t, "social-account", created.Label)
 	assert.Equal(t, "social", created.AuthMethod)
 	assert.NotNil(t, created.RefreshToken)
@@ -160,18 +163,21 @@ func TestCreateAccountValidationAndRefreshFailureDisablesAccount(t *testing.T) {
 	})
 	require.Equal(t, http.StatusCreated, created.Code)
 
-	var resp accountResponse
-	decodeJSONResponse(t, created, &resp)
+	var createResp2 createAccountResponse
+	decodeJSONResponse(t, created, &createResp2)
+	assert.False(t, createResp2.Verified)
+	assert.Contains(t, createResp2.VerificationError, "refresh failed")
+	resp := createResp2.Account
 	assert.False(t, resp.Enabled)
 	require.NotNil(t, resp.DisabledReason)
-	assert.Contains(t, *resp.DisabledReason, "upstream refresh failed")
+	assert.Contains(t, *resp.DisabledReason, "refresh failed")
 	assert.NotNil(t, resp.RefreshToken)
 
 	stored, err := store.Get(context.Background(), resp.ID)
 	require.NoError(t, err)
 	assert.False(t, stored.Enabled)
 	require.NotNil(t, stored.DisabledReason)
-	assert.Contains(t, *stored.DisabledReason, "upstream refresh failed")
+	assert.Contains(t, *stored.DisabledReason, "refresh failed")
 }
 
 func TestPatchRefreshAndDeleteAccount(t *testing.T) {
