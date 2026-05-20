@@ -12,3 +12,10 @@
 
 - F2/F4 fixes: Anthropic handler test seams should live on Handler fields, not mutable package vars; server Run can use net.Listen + Serve so tests with port 0 can read the actual bound address through an unexported channel.
 - Claude-only API validation means existing OpenAI tests must use Claude model IDs except for explicit non-Claude rejection cases.
+
+## F4 scope fidelity re-run - 2026-05-20
+- Verdict: APPROVE. Claude-only validation present in Anthropic/OpenAI Validate() functions.
+- Anti-ban checks passed: machine ID, stable headers, per-account proxy, no quota goroutine/ticker/sleep, circuit breaker/backoff/probabilistic retry.
+- Account channels passed: CLI add, REST admin POST /accounts, fsnotify watcher.
+- Scope checks passed: no IdC/OIDC/SSO references, no GPT/Gemini/websearch/cache/compress/prompt-filter Go references, no web UI files found.
+- Infrastructure passed: modernc.org/sqlite and sticky sessions present.

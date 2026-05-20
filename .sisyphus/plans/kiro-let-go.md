@@ -2136,13 +2136,13 @@ Verifiable conditions (commands an agent can run):
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 > **Never mark F1-F4 as checked before getting user's okay.** Rejection or user feedback → fix → re-run → present again → wait for okay.
 
-- [ ] **F1. Plan Compliance Audit** — `oracle`
+- [x] **F1. Plan Compliance Audit** — `oracle`
   - Verify every task in this plan has been completed against its acceptance criteria
   - Verify Definition of Done conditions all pass
   - Verify Must-NOT-Have list is honored (no mocks in production code, no scope creep, no IdC code, no UI, no caching/compression/etc.)
   - Output: APPROVED or list of violations
 
-- [ ] **F2. Code Quality Review** — `unspecified-high`
+- [x] **F2. Code Quality Review** — `unspecified-high`
   - Run `go vet ./...`, `gofmt -l .`, `staticcheck ./...` (install if needed)
   - Verify all public APIs have doc comments
   - Verify no `TODO`/`FIXME` without issue refs
@@ -2150,7 +2150,7 @@ Verifiable conditions (commands an agent can run):
   - Verify concurrency: token refresh has double-checked locking, account manager has proper RWMutex
   - Output: APPROVED or list of issues
 
-- [ ] **F3. Real Manual QA** — `unspecified-high`
+- [x] **F3. Real Manual QA** — `unspecified-high`
   - Build both binaries: `go build ./cmd/server && go build ./cmd/cli`
   - Run server, exercise full flow:
     - Add account via CLI → verify SQLite row
@@ -2163,7 +2163,7 @@ Verifiable conditions (commands an agent can run):
     - SIGTERM → verify graceful shutdown < 30s
   - Output: APPROVED or repro steps for failures
 
-- [ ] **F4. Scope Fidelity Check** — `deep`
+- [x] **F4. Scope Fidelity Check** — `deep`
   - Compare delivered features against draft scope IN/OUT
   - Verify all 5 anti-ban techniques are implemented and exercised by tests
   - Verify all 3 account-add channels work (CLI, REST, file watch)
