@@ -47,29 +47,30 @@ func New(deps Deps) *Server {
 	r := gin.New()
 	r.RedirectTrailingSlash = false
 
+	requestLog := deps.RequestLog
+	if requestLog == nil {
+		requestLog = NewRequestLog(100)
+	}
+
 	r.Use(
 		antiban.HealthProbeMiddleware(),
 		middleware.RequestIDMiddleware(),
 		middleware.LoggingMiddleware(deps.Logger),
 		middleware.RecoverMiddleware(deps.Logger),
 		middleware.CORSMiddleware(),
+		RequestLogMiddleware(requestLog),
 	)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "version": version.Version})
 	})
 
-	requestLog := deps.RequestLog
-	if requestLog == nil {
-		requestLog = NewRequestLog(100)
-	}
-
 	proxyAuth := middleware.ProxyAuthMiddleware(deps.Cfg.Server.ProxyAPIKey)
 	anthropicHandler := anthropic.NewHandler(deps.Dispatcher, nil, deps.Logger)
-	anthropicHandler.Register(r.Group("", proxyAuth, RequestLogMiddleware(requestLog)))
+	anthropicHandler.Register(r.Group("", proxyAuth))
 
 	v1 := r.Group("/v1")
-	v1.Use(proxyAuth, RequestLogMiddleware(requestLog))
+	v1.Use(proxyAuth)
 	{
 		v1.POST("/chat/completions", openai.Handler(openai.HandlerOptions{Dispatcher: deps.Dispatcher}))
 		v1.GET("/models", openai.Models)
