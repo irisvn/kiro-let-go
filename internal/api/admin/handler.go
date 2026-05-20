@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -46,7 +47,11 @@ type Handler struct {
 	manager  refreshManager
 	quota    quotaFetcher
 	circuit  circuitSnapshotter
+	dispatch *kiro.Dispatcher
 	quotaTTL time.Duration
+
+	modelsMu    sync.Mutex
+	modelsCache map[string]cachedModels
 }
 
 type createAccountRequest struct {
@@ -108,6 +113,42 @@ type createAccountResponse struct {
 	VerificationError string          `json:"verification_error,omitempty"`
 }
 
+type AvailableModel struct {
+	ModelID             string       `json:"model_id"`
+	ModelName           string       `json:"model_name"`
+	Description         string       `json:"description"`
+	RateMultiplier      float64      `json:"rate_multiplier"`
+	RateUnit            string       `json:"rate_unit"`
+	SupportedInputTypes []string     `json:"supported_input_types"`
+	IsDefault           bool         `json:"is_default"`
+	ContextWindow       *int64       `json:"context_window,omitempty"`
+	TokenLimits         *TokenLimits `json:"token_limits,omitempty"`
+}
+
+type TokenLimits struct {
+	MaxInputTokens  int64 `json:"max_input_tokens"`
+	MaxOutputTokens int64 `json:"max_output_tokens"`
+}
+
+type ListModelsResponse struct {
+	Models       []AvailableModel `json:"models"`
+	DefaultModel *AvailableModel  `json:"default_model,omitempty"`
+	Cached       bool             `json:"cached,omitempty"`
+}
+
+type TestAccountResponse struct {
+	Status            string `json:"status"`
+	Message           string `json:"message"`
+	SubscriptionTitle string `json:"subscription_title,omitempty"`
+	UserID            string `json:"user_id,omitempty"`
+	DurationMs        int64  `json:"duration_ms"`
+}
+
+type cachedModels struct {
+	response  ListModelsResponse
+	fetchedAt time.Time
+}
+
 type quotaResponse struct {
 	SubscriptionTitle string          `json:"subscription_title"`
 	LimitTotal        int64           `json:"limit_total"`
@@ -154,8 +195,12 @@ var (
 	)
 )
 
-func NewHandler(store accountStore, manager refreshManager, quota quotaFetcher, circuit circuitSnapshotter, quotaTTL time.Duration) *Handler {
-	return &Handler{store: store, manager: manager, quota: quota, circuit: circuit, quotaTTL: quotaTTL}
+func NewHandler(store accountStore, manager refreshManager, quota quotaFetcher, circuit circuitSnapshotter, quotaTTL time.Duration, dispatcher ...*kiro.Dispatcher) *Handler {
+	var dispatch *kiro.Dispatcher
+	if len(dispatcher) > 0 {
+		dispatch = dispatcher[0]
+	}
+	return &Handler{store: store, manager: manager, quota: quota, circuit: circuit, dispatch: dispatch, quotaTTL: quotaTTL, modelsCache: make(map[string]cachedModels)}
 }
 
 func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
@@ -167,6 +212,8 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.DELETE("/accounts/:id", h.deleteAccount)
 	adminGroup.POST("/accounts/:id/refresh", h.refreshAccount)
 	adminGroup.GET("/accounts/:id/quota", h.getAccountQuota)
+	adminGroup.GET("/accounts/:id/models", h.getAccountModels)
+	adminGroup.POST("/accounts/:id/test", h.testAccount)
 	adminGroup.GET("/quota", h.getQuotaSummary)
 }
 
@@ -262,9 +309,9 @@ func (h *Handler) createAccount(c *gin.Context) {
 			}
 			created.AuthMethod = method
 			c.JSON(http.StatusCreated, createAccountResponse{
-				Account:            toAccountResponse(created, externalMethod),
-				Verified:           false,
-				VerificationError:  reason,
+				Account:           toAccountResponse(created, externalMethod),
+				Verified:          false,
+				VerificationError: reason,
 			})
 			return
 		}
@@ -518,6 +565,304 @@ func (h *Handler) getAccountQuota(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, toQuotaResponse(quota))
+}
+
+func (h *Handler) getAccountModels(c *gin.Context) {
+	acc, ok := h.loadAccount(c)
+	if !ok {
+		return
+	}
+
+	if cached, ok := h.getCachedModels(acc.ID); ok {
+		cached.Cached = true
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
+	acc, ok = h.ensureFreshToken(c, acc)
+	if !ok {
+		return
+	}
+
+	models, status, kind, err := h.fetchAccountModels(c.Request.Context(), acc)
+	if err != nil {
+		writeError(c, status, kind, err.Error())
+		return
+	}
+	h.setCachedModels(acc.ID, *models)
+	c.JSON(http.StatusOK, models)
+}
+
+func (h *Handler) testAccount(c *gin.Context) {
+	acc, ok := h.loadAccount(c)
+	if !ok {
+		return
+	}
+	if !acc.Enabled {
+		writeError(c, http.StatusBadRequest, "validation_error", "account is disabled")
+		return
+	}
+	acc, ok = h.ensureFreshToken(c, acc)
+	if !ok {
+		return
+	}
+
+	started := time.Now()
+	resp := h.fetchUsageLimits(c.Request.Context(), acc, started)
+	durationMs := time.Since(started).Milliseconds()
+	resp.DurationMs = durationMs
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) getCachedModels(accountID string) (ListModelsResponse, bool) {
+	if h == nil {
+		return ListModelsResponse{}, false
+	}
+	h.modelsMu.Lock()
+	defer h.modelsMu.Unlock()
+	if h.modelsCache == nil {
+		h.modelsCache = make(map[string]cachedModels)
+		return ListModelsResponse{}, false
+	}
+	entry, ok := h.modelsCache[accountID]
+	if !ok || time.Since(entry.fetchedAt) >= 30*time.Minute {
+		if ok {
+			delete(h.modelsCache, accountID)
+		}
+		return ListModelsResponse{}, false
+	}
+	return entry.response, true
+}
+
+func (h *Handler) setCachedModels(accountID string, resp ListModelsResponse) {
+	if h == nil {
+		return
+	}
+	h.modelsMu.Lock()
+	defer h.modelsMu.Unlock()
+	if h.modelsCache == nil {
+		h.modelsCache = make(map[string]cachedModels)
+	}
+	resp.Cached = false
+	h.modelsCache[accountID] = cachedModels{response: resp, fetchedAt: time.Now().UTC()}
+}
+
+func (h *Handler) ensureFreshToken(c *gin.Context, acc *account.Account) (*account.Account, bool) {
+	if acc == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "account is nil")
+		return nil, false
+	}
+	if !accountNeedsRefresh(acc) {
+		return acc, true
+	}
+	if h.manager == nil {
+		writeError(c, http.StatusUnauthorized, "authentication_error", "account token is missing or expired and refresh manager is not configured")
+		return nil, false
+	}
+	if err := h.manager.Refresh(c.Request.Context(), acc.ID); err != nil {
+		status := http.StatusUnauthorized
+		if errors.Is(err, account.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(c, status, errorTypeForStatus(status), fmt.Sprintf("refresh account: %v", err))
+		return nil, false
+	}
+	refreshed, err := h.store.Get(c.Request.Context(), acc.ID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, account.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(c, status, errorTypeForStatus(status), fmt.Sprintf("load refreshed account: %v", err))
+		return nil, false
+	}
+	return refreshed, true
+}
+
+func accountNeedsRefresh(acc *account.Account) bool {
+	if acc.AuthMethod == "api_key" {
+		return acc.APIKey == nil || strings.TrimSpace(*acc.APIKey) == ""
+	}
+	if acc.AccessToken == nil || strings.TrimSpace(*acc.AccessToken) == "" {
+		return true
+	}
+	return acc.ExpiresAt != nil && !acc.ExpiresAt.After(time.Now().Add(time.Minute))
+}
+
+func (h *Handler) fetchAccountModels(ctx context.Context, acc *account.Account) (*ListModelsResponse, int, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://q."+accountAPIRegion(acc)+".amazonaws.com/ListAvailableModels?origin=AI_EDITOR&maxResults=50", nil)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "internal_error", fmt.Errorf("build models request: %w", err)
+	}
+	setMinimalKiroHeaders(req, accountBearerToken(acc))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, http.StatusBadGateway, "upstream_error", fmt.Errorf("list available models: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "internal_error", fmt.Errorf("read models response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		status, kind, msg := classifyKiroHTTPError(resp.StatusCode, body)
+		return nil, status, kind, fmt.Errorf("list available models: %s", msg)
+	}
+
+	var raw struct {
+		Models       []kiroAvailableModel `json:"models"`
+		DefaultModel *kiroAvailableModel  `json:"defaultModel"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, http.StatusBadGateway, "upstream_error", fmt.Errorf("parse models response: %w", err)
+	}
+	out := &ListModelsResponse{Models: make([]AvailableModel, 0, len(raw.Models))}
+	for _, model := range raw.Models {
+		out.Models = append(out.Models, mapAvailableModel(model))
+	}
+	if raw.DefaultModel != nil {
+		defaultModel := mapAvailableModel(*raw.DefaultModel)
+		out.DefaultModel = &defaultModel
+	}
+	return out, http.StatusOK, "", nil
+}
+
+type kiroAvailableModel struct {
+	ModelID             string           `json:"modelId"`
+	ModelName           string           `json:"modelName"`
+	Description         string           `json:"description"`
+	RateMultiplier      float64          `json:"rateMultiplier"`
+	RateUnit            string           `json:"rateUnit"`
+	SupportedInputTypes []string         `json:"supportedInputTypes"`
+	IsDefault           bool             `json:"isDefault"`
+	ContextWindow       *int64           `json:"contextWindow"`
+	TokenLimits         *kiroTokenLimits `json:"tokenLimits"`
+}
+
+type kiroTokenLimits struct {
+	MaxInputTokens  int64 `json:"maxInputTokens"`
+	MaxOutputTokens int64 `json:"maxOutputTokens"`
+}
+
+func mapAvailableModel(model kiroAvailableModel) AvailableModel {
+	out := AvailableModel{
+		ModelID:             model.ModelID,
+		ModelName:           model.ModelName,
+		Description:         model.Description,
+		RateMultiplier:      model.RateMultiplier,
+		RateUnit:            model.RateUnit,
+		SupportedInputTypes: append([]string(nil), model.SupportedInputTypes...),
+		IsDefault:           model.IsDefault,
+		ContextWindow:       model.ContextWindow,
+	}
+	if model.TokenLimits != nil {
+		out.TokenLimits = &TokenLimits{MaxInputTokens: model.TokenLimits.MaxInputTokens, MaxOutputTokens: model.TokenLimits.MaxOutputTokens}
+	}
+	return out
+}
+
+func (h *Handler) fetchUsageLimits(ctx context.Context, acc *account.Account, started time.Time) TestAccountResponse {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://q."+accountAPIRegion(acc)+".amazonaws.com/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST", nil)
+	if err != nil {
+		return TestAccountResponse{Status: "error", Message: fmt.Sprintf("build usage limits request: %v", err)}
+	}
+	setMinimalKiroHeaders(req, accountBearerToken(acc))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return TestAccountResponse{Status: "error", Message: fmt.Sprintf("get usage limits: %v", err)}
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return TestAccountResponse{Status: "error", Message: fmt.Sprintf("read usage limits response: %v", err)}
+	}
+
+	result := classifyUsageLimitsResponse(resp.StatusCode, body)
+	result.DurationMs = time.Since(started).Milliseconds()
+	return result
+}
+
+func classifyUsageLimitsResponse(status int, body []byte) TestAccountResponse {
+	switch {
+	case status == http.StatusOK:
+		var raw struct {
+			SubscriptionInfo struct {
+				SubscriptionTitle string `json:"subscriptionTitle"`
+			} `json:"subscriptionInfo"`
+			UserInfo struct {
+				UserID string `json:"userId"`
+			} `json:"userInfo"`
+		}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return TestAccountResponse{Status: "error", Message: fmt.Sprintf("parse usage limits response: %v", err)}
+		}
+		return TestAccountResponse{Status: "valid", Message: "Account is valid", SubscriptionTitle: raw.SubscriptionInfo.SubscriptionTitle, UserID: raw.UserInfo.UserID}
+	case status == http.StatusUnauthorized:
+		return TestAccountResponse{Status: "token_expired", Message: "Token is invalid or expired"}
+	case status == http.StatusForbidden && strings.Contains(string(body), "TemporarilySuspended"):
+		return TestAccountResponse{Status: "banned", Message: "Account is temporarily suspended/banned"}
+	case status == http.StatusLocked:
+		return TestAccountResponse{Status: "suspended", Message: "Account is suspended"}
+	default:
+		return TestAccountResponse{Status: "error", Message: fmt.Sprintf("Kiro returned status %d: %s", status, strings.TrimSpace(string(body)))}
+	}
+}
+
+func setMinimalKiroHeaders(req *http.Request, token string) {
+	req.Header = http.Header{
+		"Authorization":               {"Bearer " + token},
+		"Content-Type":                {"application/json"},
+		"Accept":                      {"application/json"},
+		"Connection":                  {"close"},
+		"x-amzn-kiro-agent-mode":      {"vibe"},
+		"x-amzn-codewhisperer-optout": {"true"},
+	}
+}
+
+func accountBearerToken(acc *account.Account) string {
+	if acc == nil {
+		return ""
+	}
+	if acc.AccessToken != nil && strings.TrimSpace(*acc.AccessToken) != "" {
+		return strings.TrimSpace(*acc.AccessToken)
+	}
+	if acc.APIKey != nil {
+		return strings.TrimSpace(*acc.APIKey)
+	}
+	return ""
+}
+
+func accountAPIRegion(acc *account.Account) string {
+	region := ""
+	if acc != nil {
+		region = strings.TrimSpace(acc.Region)
+		if acc.APIRegion != nil && strings.TrimSpace(*acc.APIRegion) != "" {
+			region = strings.TrimSpace(*acc.APIRegion)
+		}
+	}
+	if region == "" {
+		region = "us-east-1"
+	}
+	return region
+}
+
+func classifyKiroHTTPError(status int, body []byte) (int, string, string) {
+	message := strings.TrimSpace(string(body))
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	switch {
+	case status == http.StatusUnauthorized:
+		return http.StatusUnauthorized, "authentication_error", "token is invalid or expired"
+	case status == http.StatusForbidden && strings.Contains(string(body), "TemporarilySuspended"):
+		return http.StatusForbidden, "banned_error", "account is temporarily suspended/banned"
+	case status == http.StatusLocked:
+		return http.StatusLocked, "suspended_error", "account is suspended"
+	default:
+		return http.StatusBadGateway, "upstream_error", fmt.Sprintf("Kiro returned status %d: %s", status, message)
+	}
 }
 
 func (h *Handler) getQuotaSummary(c *gin.Context) {

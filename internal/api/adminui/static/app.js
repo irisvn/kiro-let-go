@@ -131,9 +131,43 @@ function app() {
     async openDetail(id) {
       try {
         this.detailAccount = await this.apiCall('GET', '/admin/accounts/' + id);
+        this.detailAccount.models = null;
+        this.detailAccount.modelsLoading = false;
+        this.detailAccount.testLoading = false;
+        this.detailAccount.testResult = null;
         this.currentView = 'detail';
+        await this.loadAccountModels(id);
       } catch (e) {
         this.toast('Failed to load account: ' + e.message, 'error');
+      }
+    },
+
+    async loadAccountModels(accountId) {
+      if (!this.detailAccount) return;
+      this.detailAccount.modelsLoading = true;
+      try {
+        var result = await this.apiCall('GET', '/admin/accounts/' + accountId + '/models');
+        this.detailAccount.models = result || { models: [] };
+      } catch (e) {
+        this.toast('Failed to load models: ' + e.message, 'error');
+      } finally {
+        this.detailAccount.modelsLoading = false;
+      }
+    },
+
+    async testAccount(accountId) {
+      if (!this.detailAccount) return;
+      this.detailAccount.testLoading = true;
+      this.detailAccount.testResult = null;
+      try {
+        var result = await this.apiCall('POST', '/admin/accounts/' + accountId + '/test');
+        this.detailAccount.testResult = result;
+        var ok = result && result.status === 'valid';
+        this.toast(ok ? 'Account valid' : ('Account status: ' + this.testStatusLabel(result && result.status)), ok ? 'success' : 'warning');
+      } catch (e) {
+        this.toast('Test failed: ' + e.message, 'error');
+      } finally {
+        this.detailAccount.testLoading = false;
       }
     },
 
@@ -368,6 +402,37 @@ function app() {
 
     isSecretField(key) {
       return key === 'access_token' || key === 'refresh_token' || key === 'api_key';
+    },
+
+    formatRate(model) {
+      if (!model) return '-';
+      var mult = model.rate_multiplier != null ? model.rate_multiplier : 0;
+      return mult + ' ' + (model.rate_unit || '').trim();
+    },
+
+    formatTokenLimits(model) {
+      if (!model || !model.token_limits) return '-';
+      var input = model.token_limits.max_input_tokens || 0;
+      var output = model.token_limits.max_output_tokens || 0;
+      return input.toLocaleString() + ' in / ' + output.toLocaleString() + ' out';
+    },
+
+    testStatusLabel(status) {
+      var labels = {
+        valid: 'Valid',
+        banned: 'Banned',
+        suspended: 'Suspended',
+        token_expired: 'Token Expired',
+        error: 'Error'
+      };
+      return labels[status] || 'Unknown';
+    },
+
+    testStatusClass(status) {
+      if (status === 'valid') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+      if (status === 'suspended') return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+      if (status === 'banned' || status === 'token_expired') return 'bg-red-500/15 text-red-400 border-red-500/30';
+      return 'bg-slate-700/60 text-slate-300 border-slate-600';
     }
   };
 }

@@ -258,6 +258,90 @@
               </div>
             </div>
 
+            <!-- Supported models -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Available Models</h3>
+                  <p class="text-xs text-slate-500 mt-1">Fetched from Kiro ListAvailableModels</p>
+                </div>
+                <button @click="loadAccountModels(detailAccount.account.id)"
+                        :disabled="detailAccount.modelsLoading"
+                        class="text-indigo-400 hover:text-indigo-300 disabled:opacity-50 text-xs font-medium transition-colors flex items-center gap-1">
+                  <span x-show="detailAccount.modelsLoading" class="spinner" style="width:12px;height:12px;border-width:1.5px;"></span>
+                  Refresh
+                </button>
+              </div>
+              <div x-show="detailAccount.modelsLoading" class="py-8 text-center text-slate-500 text-sm">Loading models...</div>
+              <div x-show="!detailAccount.modelsLoading && (!detailAccount.models || !detailAccount.models.models || detailAccount.models.models.length === 0)" class="py-8 text-center text-slate-500 text-sm">No models loaded</div>
+              <div x-show="!detailAccount.modelsLoading && detailAccount.models && detailAccount.models.models && detailAccount.models.models.length" class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-slate-800 text-slate-500 text-left">
+                      <th class="py-2 pr-3 font-medium">Model</th>
+                      <th class="py-2 px-3 font-medium">Rate</th>
+                      <th class="py-2 px-3 font-medium">Inputs</th>
+                      <th class="py-2 px-3 font-medium">Token Limits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="model in (detailAccount.models && detailAccount.models.models) || []" :key="model.model_id">
+                      <tr class="border-b border-slate-800/50">
+                        <td class="py-3 pr-3">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-slate-100 font-medium" x-text="model.model_name || model.model_id"></span>
+                            <span x-show="model.is_default" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">Default</span>
+                          </div>
+                          <div class="font-mono text-xs text-slate-500" x-text="model.model_id"></div>
+                        </td>
+                        <td class="py-3 px-3 font-mono text-xs text-slate-300" x-text="formatRate(model)"></td>
+                        <td class="py-3 px-3 text-xs text-slate-300" x-text="(model.supported_input_types || []).join(', ') || '-'"></td>
+                        <td class="py-3 px-3 font-mono text-xs text-slate-300" x-text="formatTokenLimits(model)"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Test API -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Test API</h3>
+                <button @click="testAccount(detailAccount.account.id)"
+                        :disabled="detailAccount.testLoading || !detailAccount.account.enabled"
+                        class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors flex items-center gap-2">
+                  <span x-show="detailAccount.testLoading" class="spinner"></span>
+                  <span x-text="detailAccount.testLoading ? 'Testing...' : 'Test Connection'"></span>
+                </button>
+              </div>
+              <p class="text-xs text-slate-500 mb-3">Uses getUsageLimits only; no chat quota is consumed.</p>
+              <template x-if="detailAccount.testResult">
+                <div class="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+                  <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium border"
+                          :class="testStatusClass(detailAccount.testResult.status)"
+                          x-text="testStatusLabel(detailAccount.testResult.status)"></span>
+                    <span class="text-xs text-slate-500" x-text="detailAccount.testResult.duration_ms + ' ms'"></span>
+                  </div>
+                  <div class="grid sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span class="text-slate-500 block">Message</span>
+                      <span class="text-slate-200" x-text="detailAccount.testResult.message || '-'"></span>
+                    </div>
+                    <div>
+                      <span class="text-slate-500 block">Subscription</span>
+                      <span class="text-slate-200" x-text="detailAccount.testResult.subscription_title || '-'"></span>
+                    </div>
+                    <div>
+                      <span class="text-slate-500 block">User ID</span>
+                      <span class="text-slate-200 font-mono break-all" x-text="detailAccount.testResult.user_id || '-'"></span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
             <!-- Counters -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4">
               <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Counters</h3>

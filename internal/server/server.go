@@ -73,6 +73,7 @@ func New(deps Deps) *Server {
 		deps.QuotaFetcher,
 		deps.Circuit,
 		time.Duration(deps.Cfg.Quota.CacheTTLSeconds)*time.Second,
+		deps.Dispatcher,
 	)
 	admin.RegisterRoutes(r, deps.Cfg.Server.AdminAPIKey, adminHandler)
 

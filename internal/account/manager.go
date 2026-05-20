@@ -119,6 +119,18 @@ func (m *Manager) Acquire(ctx context.Context, hint SelectionHint) (*Acquisition
 	return m.acquireAccount(ctx, chosen)
 }
 
+// AcquireAccount prepares a specific account for a request without consulting
+// the balancer. Callers remain responsible for checking account eligibility.
+func (m *Manager) AcquireAccount(ctx context.Context, acc *Account) (*Acquisition, error) {
+	if m == nil || m.store == nil {
+		return nil, fmt.Errorf("account manager store is nil")
+	}
+	if acc == nil {
+		return nil, fmt.Errorf("account is nil")
+	}
+	return m.acquireAccount(ctx, acc)
+}
+
 // Refresh forces a credential refresh for the specified account.
 func (m *Manager) Refresh(ctx context.Context, accountID string) error {
 	if m == nil || m.store == nil {

@@ -204,6 +204,88 @@ func (d *Dispatcher) Once(ctx context.Context, payload *KiroPayload, hint accoun
 	return full, nil
 }
 
+// TestWithAccount sends a single payload through the provided account and
+// aggregates the streaming Kiro response without invoking account balancing.
+func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, payload *KiroPayload) (FullResponse, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if d == nil || d.client == nil || d.manager == nil {
+		return FullResponse{}, errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")
+	}
+	if acc == nil {
+		return FullResponse{}, errs.New(errs.ClassFatal, "MISSING_ACCOUNT", "missing Kiro account")
+	}
+	requestPayload, err := json.Marshal(payload)
+	if err != nil {
+		return FullResponse{}, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
+	}
+	acq, err := d.manager.AcquireAccount(ctx, acc)
+	if err != nil {
+		return FullResponse{}, classifyError(err)
+	}
+	req, err := buildKiroRequest(acq.Account, requestPayload, acq.Token, acq.Region)
+	if err != nil {
+		releaseFailure(acq, "build_request_error")
+		return FullResponse{}, err
+	}
+	body, resp, err := d.client.Stream(ctx, acq.Account, req)
+	if resp != nil && resp.StatusCode != http.StatusOK {
+		if body != nil {
+			_ = body.Close()
+		}
+		classified := classifyResponse(resp, err)
+		releaseFailure(acq, failureReason(classified))
+		return FullResponse{}, classified
+	}
+	if err != nil {
+		if body != nil {
+			_ = body.Close()
+		}
+		classified := classifyError(err)
+		releaseFailure(acq, failureReason(classified))
+		return FullResponse{}, classified
+	}
+	if body == nil {
+		err := errs.New(errs.ClassRecoverable, "EMPTY_STREAM", "Kiro returned an empty stream body")
+		releaseFailure(acq, "empty_stream")
+		return FullResponse{}, err
+	}
+
+	events := d.forwardStream(ctx, acq, body, requestPayload)
+	var full FullResponse
+	toolIndex := map[string]int{}
+	for event := range events {
+		switch e := event.(type) {
+		case TextDelta:
+			full.Text += e.Text
+		case ThinkingDelta:
+			full.Thinking += e.Text
+		case ToolUseStart:
+			toolIndex[e.ID] = len(full.ToolUses)
+			full.ToolUses = append(full.ToolUses, ToolUseEntry{ToolUseID: e.ID, Name: e.Name})
+		case ToolUseDelta:
+			idx, ok := toolIndex[e.ID]
+			if !ok {
+				idx = len(full.ToolUses)
+				toolIndex[e.ID] = idx
+				full.ToolUses = append(full.ToolUses, ToolUseEntry{ToolUseID: e.ID})
+			}
+			full.ToolUses[idx].Input += e.InputDelta
+		case Usage:
+			full.Usage = e
+		case ContextUsage:
+			ctxUsage := e
+			full.ContextUsage = &ctxUsage
+		case Stop:
+			full.StopReason = e.Reason
+		case ErrorEvent:
+			return full, e.Err
+		}
+	}
+	return full, nil
+}
+
 func (d *Dispatcher) forwardStream(ctx context.Context, acq *account.Acquisition, body io.ReadCloser, payload []byte) <-chan StreamEvent {
 	out := make(chan StreamEvent, streamChannelCapacity)
 	decoder := NewStreamDecoder(d.logger)
