@@ -1,0 +1,15 @@
+{
+  "model": "gpt-4o",
+  "messages": [
+    {"role": "system", "content": "You are concise."},
+    {"role": "system", "content": "Prefer examples."},
+    {"role": "user", "content": "Hello"},
+    {"role": "user", "content": "Also adjacent"},
+    {"role": "assistant", "content": "Hi"}
+  ],
+  "max_tokens": 128,
+  "temperature": 0.2,
+  "top_p": 0.9,
+  "stop": ["END"],
+  "reasoning_effort": "medium"
+}

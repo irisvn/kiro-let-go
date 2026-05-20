@@ -1,0 +1,13 @@
+{
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {"type": "text", "text": "What is in this image?"},
+        {"type": "image_url", "image_url": {"url": "https://example.com/image.png", "detail": "high"}}
+      ]
+    }
+  ],
+  "max_tokens": 300
+}

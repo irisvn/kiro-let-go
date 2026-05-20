@@ -1,0 +1,13 @@
+{
+  "assistantResponse": {
+    "content": "Hello there"
+  },
+  "toolUse": {
+    "name": "get_weather",
+    "toolUseId": "tu_1",
+    "input": "{\"city\":\"NYC\""
+  },
+  "contextUsage": {
+    "contextUsagePercentage": 0.42
+  }
+}

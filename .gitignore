@@ -1,0 +1,6 @@
+bin/
+.data/
+.sisyphus/evidence/
+*.log
+.env
+vendor/

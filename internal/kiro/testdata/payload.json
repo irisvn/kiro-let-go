@@ -1,0 +1,63 @@
+{
+  "conversationState": {
+    "conversationId": "conv-123",
+    "agentContinuationId": "agent-456",
+    "agentTaskType": "chat",
+    "chatTriggerType": "manual",
+    "currentMessage": {
+      "userInputMessage": {
+        "content": "What is the weather?",
+        "modelId": "claude-sonnet-4.6",
+        "origin": "vscode",
+        "userInputMessageContext": {
+          "tools": [
+            {
+              "toolSpecification": {
+                "name": "get_weather",
+                "description": "Get current weather for a city",
+                "inputSchema": {
+                  "json": {
+                    "type": "object",
+                    "properties": {
+                      "city": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "toolResults": [
+            {
+              "toolUseId": "tu_1",
+              "content": [
+                {
+                  "text": "Sunny, 25C"
+                }
+              ],
+              "status": "success"
+            }
+          ]
+        },
+        "images": [
+          {
+            "format": "png",
+            "source": {
+              "bytes": "iVA="
+            }
+          }
+        ]
+      }
+    },
+    "history": [
+      {
+        "content": "Hi"
+      },
+      {
+        "content": "Hello!"
+      }
+    ]
+  },
+  "profileArn": "arn:aws:iam::123456789012:profile/kiro"
+}

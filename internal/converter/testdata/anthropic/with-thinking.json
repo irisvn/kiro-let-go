@@ -1,0 +1,12 @@
+{
+  "model": "claude-3-7-sonnet-20250219",
+  "max_tokens": 1024,
+  "thinking": {"type": "enabled", "budget_tokens": 0},
+  "messages": [
+    {"role": "user", "content": "Solve 2+2."},
+    {"role": "assistant", "content": [
+      {"type": "thinking", "thinking": "Add the numbers.", "signature": "sig-1"},
+      {"type": "text", "text": "4"}
+    ]}
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "msg_02",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "thinking",
+      "thinking": "I need to analyze this...",
+      "signature": "abc123"
+    },
+    {
+      "type": "text",
+      "text": "Here is my analysis."
+    }
+  ],
+  "model": "claude-3-opus-20240229",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 20,
+    "output_tokens": 50
+  }
+}

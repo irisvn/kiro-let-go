@@ -1,0 +1,29 @@
+{
+  "model": "gpt-4o",
+  "messages": [
+    {"role": "user", "content": "weather?"},
+    {
+      "role": "assistant",
+      "content": "I will check.",
+      "tool_calls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": {"name": "get_weather", "arguments": "{\"location\":\"Paris\"}"}
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather",
+        "parameters": {"type":"object","properties":{"location":{"type":"string"}},"required":["location"]}
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "reasoning_effort": "low"
+}

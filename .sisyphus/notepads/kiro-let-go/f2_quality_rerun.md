@@ -1,0 +1,16 @@
+## F2 Code Quality Review (re-run) - 2026-05-20
+- `go vet ./...`: PASS (exit 0, no output).
+- `gofmt -l .`: PASS (no files reported).
+- `staticcheck ./...`: PASS when rerun as `GOFLAGS=-buildvcs=false staticcheck ./...` after an initial VCS-stamping failure in this non-git workspace.
+- Exported API docs: FAIL.
+  - `internal/errs/errs.go:102`: exported function `ClassOf` has a doc comment, but it starts with `Class` instead of `ClassOf` (`ST1020`).
+- TODO/FIXME audit: PASS under `internal/`. Repository-wide matches were only in `.sisyphus/` plan/notepad files.
+- Panic audit: PASS for production code under `internal/`; the only `panic(` match was test-only at `internal/server/server_test.go:130`.
+- Error-handling audit: FAIL.
+  - `internal/kiro/dispatcher.go:305-306`: `io.ReadAll(resp.Body)` and `resp.Body.Close()` errors are discarded while classifying non-200 upstream responses.
+  - `internal/kiro/auth_social.go:90-92`: response decode failure is explicitly discarded and only status-based handling continues.
+  - `internal/kiro/auth_social.go:146`, `164`, `171`: `json.Unmarshal` errors are discarded for `refreshToken`, `error`, and `error_description` fields.
+- Concurrency audit: PASS.
+  - Token refresh uses per-account locking plus a second freshness check after reloading the latest account state (`internal/account/manager.go:228-238`), which is the expected double-checked locking pattern.
+  - Sticky-session state uses `sync.RWMutex` correctly: read path in `stickyCandidate` (`internal/account/manager.go:173-175`) and write path in `ReleaseSuccess` (`internal/account/manager.go:213-215`).
+- Note: the requested `internal/kiro/auth.go` file no longer exists; auth logic is split across `internal/kiro/auth_social.go` and `internal/kiro/auth_apikey.go`.

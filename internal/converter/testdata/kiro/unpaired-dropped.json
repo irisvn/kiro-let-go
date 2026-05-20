@@ -1,0 +1,44 @@
+{
+  "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
+    "agentContinuationId": "00000000-0000-4000-8000-000000000002",
+    "agentTaskType": "vibe",
+    "chatTriggerType": "MANUAL",
+    "currentMessage": {
+      "userInputMessage": {
+        "content": "done?",
+        "modelId": "claude-sonnet-4.6",
+        "origin": "AI_EDITOR"
+      }
+    },
+    "history": [
+      {
+        "content": "",
+        "toolUses": [
+          {
+            "toolUseId": "paired",
+            "name": "ok",
+            "input": "{}"
+          }
+        ]
+      },
+      {
+        "content": "",
+        "userInputMessageContext": {
+          "toolResults": [
+            {
+              "toolUseId": "paired",
+              "content": [
+                {
+                  "text": "ok"
+                }
+              ],
+              "status": "success"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "profileArn": "arn:aws:kiro:test-profile"
+}

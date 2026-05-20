@@ -1,0 +1,22 @@
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "system": [{"type": "text", "text": "Use tools when useful.", "cache_control": {"type": "ephemeral"}}],
+  "max_tokens": 512,
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get the weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {"city": {"type": "string"}},
+        "required": ["city"]
+      }
+    }
+  ],
+  "tool_choice": {"type": "tool", "name": "get_weather"},
+  "messages": [
+    {"role": "user", "content": "Weather in Paris?"},
+    {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {"city": "Paris"}}]},
+    {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_1", "content": "Sunny", "is_error": false}]}
+  ]
+}

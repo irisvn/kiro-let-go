@@ -1,0 +1,13 @@
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "system": "You are concise.",
+  "max_tokens": 256,
+  "temperature": 0.3,
+  "top_p": 0.9,
+  "top_k": 40,
+  "stop_sequences": ["STOP"],
+  "messages": [
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": [{"type": "text", "text": "Hi there"}]}
+  ]
+}

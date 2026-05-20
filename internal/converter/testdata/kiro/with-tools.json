@@ -1,0 +1,70 @@
+{
+  "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
+    "agentContinuationId": "00000000-0000-4000-8000-000000000002",
+    "agentTaskType": "vibe",
+    "chatTriggerType": "MANUAL",
+    "currentMessage": {
+      "userInputMessage": {
+        "content": "Thanks",
+        "modelId": "claude-opus-4.7",
+        "origin": "AI_EDITOR",
+        "userInputMessageContext": {
+          "tools": [
+            {
+              "toolSpecification": {
+                "name": "get_weather",
+                "description": "Get current weather",
+                "inputSchema": {
+                  "json": {
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["location"]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "history": [
+      {
+        "content": "Weather?",
+        "modelId": "claude-opus-4.7",
+        "origin": "AI_EDITOR"
+      },
+      {
+        "content": "Checking",
+        "toolUses": [
+          {
+            "toolUseId": "call_1",
+            "name": "get_weather",
+            "input": "{\"location\":\"Paris\"}"
+          }
+        ]
+      },
+      {
+        "content": "",
+        "userInputMessageContext": {
+          "toolResults": [
+            {
+              "toolUseId": "call_1",
+              "content": [
+                {
+                  "text": "18C"
+                }
+              ],
+              "status": "success"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "profileArn": "arn:aws:kiro:test-profile"
+}
