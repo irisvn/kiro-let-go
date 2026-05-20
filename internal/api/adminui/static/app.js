@@ -9,6 +9,11 @@ function app() {
     detailAccount: null,
     quotas: [],
     health: {},
+    proxyConfig: null,
+    proxyLog: [],
+    roundRobinResult: null,
+    roundRobinLoading: false,
+    roundRobinCount: 5,
     actionLoading: false,
     quotaLoading: false,
     quotaRefreshing: {},
@@ -121,6 +126,14 @@ function app() {
       }
       if (res.status === 204) return null;
       return res.json();
+    },
+
+    switchTab(tab) {
+      this.currentView = tab;
+      if (tab === 'proxy') {
+        this.loadProxyConfig();
+        this.loadProxyLog();
+      }
     },
 
     toast(message, type) {
@@ -373,6 +386,40 @@ function app() {
       }
     },
 
+    async loadProxyConfig() {
+      try {
+        this.proxyConfig = await this.apiCall('GET', '/admin/proxy/config');
+      } catch (e) {
+        this.toast('Failed to load proxy config: ' + e.message, 'error');
+      }
+    },
+
+    async loadProxyLog() {
+      try {
+        this.proxyLog = await this.apiCall('GET', '/admin/proxy/log?limit=50') || [];
+      } catch (e) {
+        this.toast('Failed to load proxy log: ' + e.message, 'error');
+      }
+    },
+
+    async testRoundRobin() {
+      this.roundRobinLoading = true;
+      this.roundRobinResult = null;
+      try {
+        this.roundRobinResult = await this.apiCall('POST', '/admin/proxy/test-roundrobin', { count: this.roundRobinCount });
+        this.toast('Round-robin test completed', 'success');
+        await this.loadProxyConfig();
+      } catch (e) {
+        this.toast('Round-robin test failed: ' + e.message, 'error');
+      } finally {
+        this.roundRobinLoading = false;
+      }
+    },
+
+    clearProxyLog() {
+      this.proxyLog = [];
+    },
+
     async refreshAllQuota() {
       this.quotaLoading = true;
       try {
@@ -441,6 +488,21 @@ function app() {
       try {
         var d = new Date(val);
         return d.toLocaleString();
+      } catch (e) {
+        return val;
+      }
+    },
+
+    formatDuration(ms) {
+      if (ms == null) return '-';
+      if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+      return ms + 'ms';
+    },
+
+    formatShortTime(val) {
+      if (!val) return '-';
+      try {
+        return new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       } catch (e) {
         return val;
       }

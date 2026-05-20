@@ -29,6 +29,7 @@ type Deps struct {
 	Dispatcher   *kiro.Dispatcher
 	QuotaFetcher *account.Fetcher
 	Circuit      *account.CircuitBreaker
+	RequestLog   *RequestLog
 }
 
 type Server struct {
@@ -38,6 +39,7 @@ type Server struct {
 	manager      *account.Manager
 	dispatcher   *kiro.Dispatcher
 	quotaFetcher *account.Fetcher
+	requestLog   *RequestLog
 	boundAddr    chan string
 }
 
@@ -56,12 +58,17 @@ func New(deps Deps) *Server {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "version": version.Version})
 	})
 
+	requestLog := deps.RequestLog
+	if requestLog == nil {
+		requestLog = NewRequestLog(100)
+	}
+
 	proxyAuth := middleware.ProxyAuthMiddleware(deps.Cfg.Server.ProxyAPIKey)
 	anthropicHandler := anthropic.NewHandler(deps.Dispatcher, nil, deps.Logger)
-	anthropicHandler.Register(r.Group("", proxyAuth))
+	anthropicHandler.Register(r.Group("", proxyAuth, RequestLogMiddleware(requestLog)))
 
 	v1 := r.Group("/v1")
-	v1.Use(proxyAuth)
+	v1.Use(proxyAuth, RequestLogMiddleware(requestLog))
 	{
 		v1.POST("/chat/completions", openai.Handler(openai.HandlerOptions{Dispatcher: deps.Dispatcher}))
 		v1.GET("/models", openai.Models)
@@ -75,6 +82,7 @@ func New(deps Deps) *Server {
 		time.Duration(deps.Cfg.Quota.CacheTTLSeconds)*time.Second,
 		deps.Dispatcher,
 	)
+	adminHandler.SetProxyDependencies(deps.Cfg, requestLog, deps.Manager)
 	admin.RegisterRoutes(r, deps.Cfg.Server.AdminAPIKey, adminHandler)
 
 	adminui.RegisterRoutes(r)
@@ -86,6 +94,7 @@ func New(deps Deps) *Server {
 		manager:      deps.Manager,
 		dispatcher:   deps.Dispatcher,
 		quotaFetcher: deps.QuotaFetcher,
+		requestLog:   requestLog,
 		boundAddr:    make(chan string, 1),
 	}
 }

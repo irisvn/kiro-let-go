@@ -78,8 +78,8 @@
       <div class="flex items-center gap-6">
         <span class="text-lg font-bold text-white tracking-tight">kiro-let-go</span>
         <div class="flex gap-1">
-          <template x-for="tab in ['accounts','quota','health']" :key="tab">
-            <button @click="currentView = tab"
+          <template x-for="tab in ['accounts','quota','proxy','health']" :key="tab">
+            <button @click="switchTab(tab)"
                     :class="currentView === tab ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 border-transparent'"
                     class="px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"
                     x-text="tab.charAt(0).toUpperCase() + tab.slice(1)">
@@ -561,6 +561,107 @@
 
         <div x-show="quotas.length === 0" class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
           <p class="text-slate-500">No accounts found. Add an account first.</p>
+        </div>
+      </div>
+
+      <!-- Proxy view -->
+      <div x-show="currentView === 'proxy'" x-cloak class="fade-in space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-semibold text-white">Proxy</h2>
+          <button @click="loadProxyConfig(); loadProxyLog()" class="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">Refresh</button>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">API Endpoints</h3>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <h4 class="text-indigo-400 font-medium mb-2">Anthropic API</h4>
+              <template x-for="ep in (proxyConfig && proxyConfig.endpoints ? proxyConfig.endpoints.filter(e => e.format === 'anthropic') : [])" :key="ep.path">
+                <div class="flex gap-3 text-sm py-1">
+                  <span class="font-mono text-emerald-400 w-12" x-text="ep.method"></span>
+                  <span class="font-mono text-slate-200" x-text="ep.path"></span>
+                  <span class="text-slate-500" x-text="ep.description"></span>
+                </div>
+              </template>
+            </div>
+            <div>
+              <h4 class="text-indigo-400 font-medium mb-2">OpenAI API</h4>
+              <template x-for="ep in (proxyConfig && proxyConfig.endpoints ? proxyConfig.endpoints.filter(e => e.format === 'openai') : [])" :key="ep.path">
+                <div class="flex gap-3 text-sm py-1">
+                  <span class="font-mono text-emerald-400 w-12" x-text="ep.method"></span>
+                  <span class="font-mono text-slate-200" x-text="ep.path"></span>
+                  <span class="text-slate-500" x-text="ep.description"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="mt-4 pt-3 border-t border-slate-800 text-sm text-slate-400">
+            Auth: <span class="font-mono text-slate-200">Authorization: Bearer &lt;proxy_api_key&gt;</span>
+            <span class="mx-2 text-slate-600">or</span>
+            <span class="font-mono text-slate-200">x-api-key: &lt;proxy_api_key&gt;</span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5" x-show="proxyConfig">
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Configuration</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div><span class="text-slate-500 text-xs block">Strategy</span><span class="text-slate-200 font-mono" x-text="proxyConfig.load_balancer_strategy"></span></div>
+            <div><span class="text-slate-500 text-xs block">Sticky</span><span class="text-slate-200 font-mono" x-text="proxyConfig.sticky_session ? 'true' : 'false'"></span></div>
+            <div><span class="text-slate-500 text-xs block">Max Attempts</span><span class="text-slate-200 font-mono" x-text="proxyConfig.max_attempts"></span></div>
+            <div><span class="text-slate-500 text-xs block">Cooldown</span><span class="text-slate-200 font-mono" x-text="proxyConfig.base_cooldown_sec + 's'"></span></div>
+            <div><span class="text-slate-500 text-xs block">Accounts</span><span class="text-slate-200 font-mono" x-text="proxyConfig.enabled_accounts + ' enabled / ' + proxyConfig.total_accounts + ' total'"></span></div>
+            <div><span class="text-slate-500 text-xs block">Quota TTL</span><span class="text-slate-200 font-mono" x-text="proxyConfig.quota_cache_ttl_seconds + 's'"></span></div>
+            <div><span class="text-slate-500 text-xs block">Bind</span><span class="text-slate-200 font-mono" x-text="proxyConfig.host + ':' + proxyConfig.port"></span></div>
+            <div><span class="text-slate-500 text-xs block">Retry Chance</span><span class="text-slate-200 font-mono" x-text="proxyConfig.probabilistic_retry_chance"></span></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Round-Robin Test</h3>
+            <div class="flex items-center gap-2">
+              <input x-model.number="roundRobinCount" type="number" min="1" max="20" class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white">
+              <button @click="testRoundRobin()" :disabled="roundRobinLoading" class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors flex items-center gap-2">
+                <span x-show="roundRobinLoading" class="spinner"></span>Run Test
+              </button>
+            </div>
+          </div>
+          <template x-if="roundRobinResult">
+            <div class="space-y-2 text-sm">
+              <template x-for="r in roundRobinResult.results" :key="r.attempt">
+                <div class="flex items-center gap-2 font-mono">
+                  <span class="text-slate-500" x-text="'#' + r.attempt"></span>
+                  <span class="text-slate-600">→</span>
+                  <span class="text-slate-200" x-text="r.account_label || r.account_id || '-'"></span>
+                  <span :class="r.success ? 'text-emerald-400' : 'text-red-400'" x-text="r.success ? '✓' : '✕'"></span>
+                  <span class="text-red-400 text-xs" x-show="r.error" x-text="r.error"></span>
+                </div>
+              </template>
+              <div class="pt-2 border-t border-slate-800 text-slate-400">
+                Summary: <span class="font-mono text-slate-200" x-text="Object.entries(roundRobinResult.summary || {}).map(([k,v]) => k + ': ' + v).join(', ') || '-'"></span>
+              </div>
+            </div>
+          </template>
+          <p x-show="!roundRobinResult" class="text-slate-500 text-sm">Acquire + release only; no upstream chat requests are sent.</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div class="flex items-center justify-between p-5 border-b border-slate-800">
+            <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Recent Requests</h3>
+            <div class="flex gap-3">
+              <button @click="loadProxyLog()" class="text-indigo-400 hover:text-indigo-300 text-xs font-medium">Refresh</button>
+              <button @click="clearProxyLog()" class="text-slate-400 hover:text-white text-xs font-medium">Clear</button>
+            </div>
+          </div>
+          <table class="w-full text-sm">
+            <thead><tr class="border-b border-slate-800 text-slate-400 text-left"><th class="px-4 py-3 font-medium">Time</th><th class="px-4 py-3 font-medium">Method</th><th class="px-4 py-3 font-medium">Path</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium">Dur</th><th class="px-4 py-3 font-medium">Format</th></tr></thead>
+            <tbody>
+              <template x-for="entry in proxyLog" :key="entry.id">
+                <tr class="border-b border-slate-800/50 hover:bg-slate-800/30"><td class="px-4 py-3 text-slate-400 font-mono text-xs" x-text="formatShortTime(entry.timestamp)"></td><td class="px-4 py-3 text-emerald-400 font-mono" x-text="entry.method"></td><td class="px-4 py-3 text-slate-200 font-mono" x-text="entry.path"></td><td class="px-4 py-3 font-mono" :class="entry.status >= 400 ? 'text-red-400' : 'text-emerald-400'" x-text="entry.status"></td><td class="px-4 py-3 text-slate-300 font-mono" x-text="formatDuration(entry.duration_ms)"></td><td class="px-4 py-3 text-slate-400" x-text="entry.format || '-'"></td></tr>
+              </template>
+              <tr x-show="proxyLog.length === 0"><td colspan="6" class="px-4 py-8 text-center text-slate-500">No proxy requests logged</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 

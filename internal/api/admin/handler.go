@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/irisvn/kiro-let-go/internal/account"
 	"github.com/irisvn/kiro-let-go/internal/antiban"
+	"github.com/irisvn/kiro-let-go/internal/config"
 	"github.com/irisvn/kiro-let-go/internal/kiro"
 	"github.com/irisvn/kiro-let-go/internal/server/middleware"
 )
@@ -44,12 +45,15 @@ type circuitSnapshotter interface {
 }
 
 type Handler struct {
-	store    accountStore
-	manager  refreshManager
-	quota    quotaFetcher
-	circuit  circuitSnapshotter
-	dispatch *kiro.Dispatcher
-	quotaTTL time.Duration
+	store      accountStore
+	manager    refreshManager
+	quota      quotaFetcher
+	circuit    circuitSnapshotter
+	dispatch   *kiro.Dispatcher
+	quotaTTL   time.Duration
+	cfg        *config.Config
+	requestLog requestLogReader
+	acquirer   accountAcquirer
 
 	modelsMu    sync.Mutex
 	modelsCache map[string]cachedModels
@@ -232,6 +236,9 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.POST("/accounts/:id/test", h.testAccount)
 	adminGroup.POST("/accounts/:id/chat-test", h.chatTestAccount)
 	adminGroup.GET("/quota", h.getQuotaSummary)
+	adminGroup.GET("/proxy/config", h.getProxyConfig)
+	adminGroup.GET("/proxy/log", h.getProxyLog)
+	adminGroup.POST("/proxy/test-roundrobin", h.testRoundRobin)
 }
 
 func (h *Handler) createAccount(c *gin.Context) {
@@ -793,9 +800,9 @@ func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model,
 	req.Header.Set("Accept", "application/vnd.amazon.eventstream")
 
 	chatClient := &http.Client{Transport: &http.Transport{
-		DisableCompression: true,
-		DisableKeepAlives:  true,
-		ForceAttemptHTTP2:  true,
+		DisableCompression:  true,
+		DisableKeepAlives:   true,
+		ForceAttemptHTTP2:   true,
 		TLSHandshakeTimeout: 10 * time.Second,
 	}}
 	resp, err := chatClient.Do(req)
