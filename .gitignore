@@ -4,3 +4,9 @@ bin/
 *.log
 .env
 vendor/
+
+# Stray binaries built outside bin/ (use `make build` which writes to bin/)
+/kiro-let-go
+/kiro-let-go-cli
+/server
+/cli
