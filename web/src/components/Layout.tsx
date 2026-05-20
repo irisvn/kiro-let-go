@@ -5,6 +5,7 @@ const navItems = [
   { to: '/admin/ui/accounts', label: 'Accounts' },
   { to: '/admin/ui/quota', label: 'Quota' },
   { to: '/admin/ui/proxy', label: 'Proxy' },
+  { to: '/admin/ui/logs', label: 'Logs' },
   { to: '/admin/ui/health', label: 'Health' },
 ]
 

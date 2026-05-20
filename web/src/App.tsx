@@ -6,6 +6,7 @@ import { AccountsPage } from '@/pages/AccountsPage'
 import { AccountDetailPage } from '@/pages/AccountDetailPage'
 import { QuotaPage } from '@/pages/QuotaPage'
 import { ProxyPage } from '@/pages/ProxyPage'
+import { RequestLogPage } from '@/pages/RequestLogPage'
 import { HealthPage } from '@/pages/HealthPage'
 import { ToastContainer } from '@/components/Toast'
 
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="quota" element={<QuotaPage />} />
           <Route path="proxy" element={<ProxyPage />} />
+          <Route path="logs" element={<RequestLogPage />} />
           <Route path="health" element={<HealthPage />} />
         </Route>
       </Routes>
