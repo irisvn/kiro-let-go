@@ -40,6 +40,7 @@ function app() {
     deleteTarget: null,
     healthInterval: null,
     quotaInterval: null,
+    proxyLogInterval: null,
 
     init() {
       var key = sessionStorage.getItem('kiro_admin_api_key');
@@ -93,6 +94,7 @@ function app() {
       this.detailAccount = null;
       if (this.healthInterval) clearInterval(this.healthInterval);
       if (this.quotaInterval) clearInterval(this.quotaInterval);
+      if (this.proxyLogInterval) clearInterval(this.proxyLogInterval);
       this.health = {};
       if (this.healthInterval) {
         clearInterval(this.healthInterval);
@@ -135,6 +137,9 @@ function app() {
       if (tab === 'proxy') {
         this.loadProxyConfig();
         this.loadProxyLog();
+        this.startProxyLogPoll();
+      } else {
+        this.stopProxyLogPoll();
       }
     },
 
@@ -401,6 +406,23 @@ function app() {
         this.proxyLog = await this.apiCall('GET', '/admin/proxy/log?limit=50') || [];
       } catch (e) {
         this.toast('Failed to load proxy log: ' + e.message, 'error');
+      }
+    },
+
+    startProxyLogPoll() {
+      this.stopProxyLogPoll();
+      var self = this;
+      this.proxyLogInterval = setInterval(function() {
+        if (self.authenticated && self.currentView === 'proxy') {
+          self.loadProxyLog();
+        }
+      }, 10000);
+    },
+
+    stopProxyLogPoll() {
+      if (this.proxyLogInterval) {
+        clearInterval(this.proxyLogInterval);
+        this.proxyLogInterval = null;
       }
     },
 
