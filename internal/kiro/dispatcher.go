@@ -321,11 +321,10 @@ func buildKiroRequest(acc *account.Account, payload []byte, token, region string
 	if err := json.Unmarshal(payload, &requestPayload); err != nil {
 		return nil, errs.Wrap(err, errs.ClassFatal, "failed to unmarshal Kiro payload")
 	}
-	if acc.ProfileARN != nil {
-		profileARN := strings.TrimSpace(*acc.ProfileARN)
-		if profileARN != "" {
-			requestPayload.ProfileArn = profileARN
-		}
+	if acc.ProfileARN != nil && strings.TrimSpace(*acc.ProfileARN) != "" {
+		requestPayload.ProfileArn = strings.TrimSpace(*acc.ProfileARN)
+	} else if strings.EqualFold(acc.AuthMethod, "social") && requestPayload.ProfileArn == "" {
+		requestPayload.ProfileArn = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK"
 	}
 	var err error
 	payload, err = json.Marshal(requestPayload)
