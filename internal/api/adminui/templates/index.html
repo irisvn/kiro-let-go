@@ -188,12 +188,24 @@
                   {label:'Created', key:'created_at'},
                   {label:'Updated', key:'updated_at'},
                 ]" :key="field.key">
-                  <div>
+                  <div x-data="{ revealed: false }">
                     <span class="text-slate-500 text-xs block" x-text="field.label"></span>
-                    <span class="text-slate-200 font-mono text-xs break-all"
-                          x-text="field.key === 'enabled'
-                            ? (detailAccount.account[field.key] ? 'Yes' : 'No')
-                            : (isSecretField(field.key) ? '****' : (detailAccount.account[field.key] || '-'))"></span>
+                    <template x-if="isSecretField(field.key)">
+                      <div class="flex items-start gap-2">
+                        <span class="text-slate-200 font-mono text-xs break-all flex-1"
+                              x-text="revealed ? (detailAccount.account[field.key] || '-') : (detailAccount.account[field.key] ? '••••••••••••' : '-')"></span>
+                        <button x-show="detailAccount.account[field.key]"
+                                @click="revealed = !revealed"
+                                class="text-xs text-indigo-400 hover:text-indigo-300 whitespace-nowrap shrink-0 mt-0.5"
+                                x-text="revealed ? 'Hide' : 'Show'"></button>
+                      </div>
+                    </template>
+                    <template x-if="!isSecretField(field.key)">
+                      <span class="text-slate-200 font-mono text-xs break-all"
+                            x-text="field.key === 'enabled'
+                              ? (detailAccount.account[field.key] ? 'Yes' : 'No')
+                              : (detailAccount.account[field.key] || '-')"></span>
+                    </template>
                   </div>
                 </template>
               </div>
