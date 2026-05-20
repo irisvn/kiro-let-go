@@ -3,7 +3,7 @@
   "kiro": { "region": "us-east-1", "auth_region": "us-east-1", "api_region": "us-east-1" },
   "storage": { "sqlite_path": ".data/kiro.db", "credentials_json_path": "" },
   "load_balancer": { "strategy": "round_robin", "sticky_session": true },
-  "quota": { "cache_ttl_seconds": 43200 },
+  "quota": { "cache_ttl_seconds": 1800 },
   "failover": { "base_cooldown_sec": 60, "max_backoff_multiplier": 1440, "probabilistic_retry_chance": 0.10, "max_attempts": 9 },
   "logging": { "level": "info", "format": "json" }
 }

@@ -28,6 +28,7 @@ function app() {
     deleteLoading: false,
     deleteTarget: null,
     healthInterval: null,
+    quotaInterval: null,
 
     init() {
       var key = sessionStorage.getItem('kiro_admin_api_key');
@@ -38,6 +39,7 @@ function app() {
         this.loadQuota();
         this.loadHealth();
         this.startHealthPoll();
+        this.startQuotaPoll();
       }
     },
 
@@ -63,6 +65,7 @@ function app() {
         this.loadQuota();
         this.loadHealth();
         this.startHealthPoll();
+        this.startQuotaPoll();
       } catch (e) {
         this.loginError = 'Network error: ' + e.message;
       } finally {
@@ -77,6 +80,8 @@ function app() {
       this.accounts = [];
       this.quotas = [];
       this.detailAccount = null;
+      if (this.healthInterval) clearInterval(this.healthInterval);
+      if (this.quotaInterval) clearInterval(this.quotaInterval);
       this.health = {};
       if (this.healthInterval) {
         clearInterval(this.healthInterval);
@@ -277,26 +282,31 @@ function app() {
     },
 
     async refreshAllQuota() {
-      await this.loadQuota();
-      this.toast('Quota data refreshed', 'success');
+      this.quotaLoading = true;
+      try {
+        for (var i = 0; i < this.quotas.length; i++) {
+          await this.refreshQuota(this.quotas[i].account_id);
+        }
+        this.toast('All quotas refreshed', 'success');
+      } finally {
+        this.quotaLoading = false;
+      }
     },
 
     async refreshQuota(accountId) {
-      this.quotaRefreshing[accountId] = true;
+      this.$set(this.quotaRefreshing, accountId, true);
       try {
         var result = await this.apiCall('GET', '/admin/accounts/' + accountId + '/quota?force=true');
         if (result) {
           for (var i = 0; i < this.quotas.length; i++) {
             if (this.quotas[i].account_id === accountId) {
-              this.quotas[i] = {
-                account_id: accountId,
-                label: this.quotas[i].label,
-                subscription_title: result.subscription_title,
-                limit_total: result.limit_total,
-                limit_remaining: result.limit_remaining,
-                fetched_at: result.fetched_at,
-                stale: false
-              };
+              this.quotas[i].subscription_title = result.subscription_title;
+              this.quotas[i].limit_total = result.limit_total;
+              this.quotas[i].limit_remaining = result.limit_remaining;
+              this.quotas[i].current_usage = result.current_usage;
+              this.quotas[i].overage_cap = result.overage_cap;
+              this.quotas[i].fetched_at = result.fetched_at;
+              this.quotas[i].stale = false;
               break;
             }
           }
@@ -305,8 +315,19 @@ function app() {
       } catch (e) {
         this.toast('Failed to refresh quota: ' + e.message, 'error');
       } finally {
-        this.quotaRefreshing[accountId] = false;
+        this.$set(this.quotaRefreshing, accountId, false);
       }
+    },
+
+    startQuotaPoll() {
+      if (this.quotaInterval) clearInterval(this.quotaInterval);
+      this.quotaInterval = setInterval(() => {
+        if (this.authenticated) {
+          for (var i = 0; i < this.quotas.length; i++) {
+            this.refreshQuota(this.quotas[i].account_id);
+          }
+        }
+      }, 30 * 60 * 1000);
     },
 
     async loadHealth() {
