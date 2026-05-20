@@ -15,7 +15,7 @@ export class UnauthorizedError extends ApiError {
 }
 
 export async function apiCall<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const key = sessionStorage.getItem(API_KEY_STORAGE)
+  const key = localStorage.getItem(API_KEY_STORAGE)
   const opts: RequestInit = {
     method,
     headers: {
@@ -27,7 +27,7 @@ export async function apiCall<T>(method: string, path: string, body?: unknown): 
   const res = await fetch(path, opts)
 
   if (res.status === 401) {
-    sessionStorage.removeItem(API_KEY_STORAGE)
+    localStorage.removeItem(API_KEY_STORAGE)
     throw new UnauthorizedError()
   }
 
@@ -49,13 +49,13 @@ export async function apiCall<T>(method: string, path: string, body?: unknown): 
 }
 
 export function getApiKey(): string | null {
-  return sessionStorage.getItem(API_KEY_STORAGE)
+  return localStorage.getItem(API_KEY_STORAGE)
 }
 
 export function setApiKey(key: string): void {
-  sessionStorage.setItem(API_KEY_STORAGE, key)
+  localStorage.setItem(API_KEY_STORAGE, key)
 }
 
 export function removeApiKey(): void {
-  sessionStorage.removeItem(API_KEY_STORAGE)
+  localStorage.removeItem(API_KEY_STORAGE)
 }
