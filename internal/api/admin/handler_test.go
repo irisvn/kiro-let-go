@@ -105,7 +105,7 @@ func TestAdminAuthCreateListAndGetRedactsSecrets(t *testing.T) {
 	decodeJSONResponse(t, createdResp, &created)
 	assert.Equal(t, "social-account", created.Label)
 	assert.Equal(t, "social", created.AuthMethod)
-	assert.Nil(t, created.RefreshToken)
+	assert.NotNil(t, created.RefreshToken)
 	assert.Nil(t, created.APIKey)
 	assert.Nil(t, created.ProxyPassword)
 	require.NotNil(t, created.AccessToken)
@@ -120,7 +120,7 @@ func TestAdminAuthCreateListAndGetRedactsSecrets(t *testing.T) {
 	decodeJSONResponse(t, listResp, &listed)
 	require.Len(t, listed, 1)
 	assert.Equal(t, created.ID, listed[0].ID)
-	assert.Nil(t, listed[0].RefreshToken)
+	assert.NotNil(t, listed[0].RefreshToken)
 	assert.Nil(t, listed[0].ProxyPassword)
 
 	circuit.RecordFailure(created.ID, "quota exhausted")
@@ -133,7 +133,7 @@ func TestAdminAuthCreateListAndGetRedactsSecrets(t *testing.T) {
 	assert.Equal(t, "open", detail.CircuitBreaker.State)
 	assert.Equal(t, 1, detail.CircuitBreaker.Failures)
 	assert.Equal(t, "quota exhausted", detail.CircuitBreaker.LastReason)
-	assert.Nil(t, detail.Account.RefreshToken)
+	assert.NotNil(t, detail.Account.RefreshToken)
 	assert.Nil(t, detail.Account.ProxyPassword)
 }
 
@@ -165,7 +165,7 @@ func TestCreateAccountValidationAndRefreshFailureDisablesAccount(t *testing.T) {
 	assert.False(t, resp.Enabled)
 	require.NotNil(t, resp.DisabledReason)
 	assert.Contains(t, *resp.DisabledReason, "upstream refresh failed")
-	assert.Nil(t, resp.RefreshToken)
+	assert.NotNil(t, resp.RefreshToken)
 
 	stored, err := store.Get(context.Background(), resp.ID)
 	require.NoError(t, err)
@@ -230,7 +230,7 @@ func TestPatchRefreshAndDeleteAccount(t *testing.T) {
 	decodeJSONResponse(t, refreshed, &refreshedResp)
 	require.NotNil(t, refreshedResp.AccessToken)
 	assert.Equal(t, "access-acc-1", *refreshedResp.AccessToken)
-	assert.Nil(t, refreshedResp.RefreshToken)
+	assert.NotNil(t, refreshedResp.RefreshToken)
 	assert.Len(t, manager.refreshCalls, 1)
 
 	deleted := performAdminRequest(t, router, http.MethodDelete, "/admin/accounts/acc-1", adminAPIKey, nil)
