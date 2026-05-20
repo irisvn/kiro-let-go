@@ -29,6 +29,7 @@ type RequestLogEntry struct {
 	OutputTokens    int       `json:"output_tokens,omitempty"`
 	Stream          bool      `json:"stream"`
 	RequestBody     string    `json:"request_body,omitempty"`
+	KiroPayload     string    `json:"kiro_payload,omitempty"`
 	ResponseSnippet string    `json:"response_snippet,omitempty"`
 	Error           string    `json:"error,omitempty"`
 	Format          string    `json:"format,omitempty"`
@@ -156,7 +157,7 @@ func (h *Handler) getProxyLog(c *gin.Context) {
 }
 
 type apiTestRequest struct {
-	Format  string `json:"format"`  // "anthropic" or "openai"
+	Format  string `json:"format"` // "anthropic" or "openai"
 	Model   string `json:"model"`
 	Message string `json:"message"`
 }
@@ -165,7 +166,7 @@ type apiTestResponse struct {
 	Success      bool   `json:"success"`
 	Format       string `json:"format"`
 	Model        string `json:"model"`
-	Response      string `json:"response"`
+	Response     string `json:"response"`
 	DurationMs   int64  `json:"duration_ms"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
@@ -207,8 +208,8 @@ func (h *Handler) testProxyAPI(c *gin.Context) {
 	}
 
 	normalized := &converter.NormalizedRequest{
-		Model:    model,
-		Messages: []converter.NormalizedMessage{{Role: "user", Parts: []converter.NormalizedPart{converter.Text{Text: message}}}},
+		Model:           model,
+		Messages:        []converter.NormalizedMessage{{Role: "user", Parts: []converter.NormalizedPart{converter.Text{Text: message}}}},
 		MaxOutputTokens: 100,
 		Stream:          false,
 	}
@@ -218,6 +219,7 @@ func (h *Handler) testProxyAPI(c *gin.Context) {
 		writeError(c, http.StatusInternalServerError, "internal_error", "build kiro payload: "+err.Error())
 		return
 	}
+	setRequestLogKiroPayload(c, payload)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
@@ -225,6 +227,8 @@ func (h *Handler) testProxyAPI(c *gin.Context) {
 	started := time.Now()
 	result, err := h.dispatch.Once(ctx, payload, account.SelectionHint{Model: model})
 	durationMs := time.Since(started).Milliseconds()
+	setRequestLogAccount(c, result.AccountID, result.AccountLabel)
+	setRequestLogUsage(c, result.Usage)
 
 	if err != nil {
 		c.JSON(http.StatusOK, apiTestResponse{
@@ -241,10 +245,12 @@ func (h *Handler) testProxyAPI(c *gin.Context) {
 		Success:      true,
 		Format:       format,
 		Model:        model,
-		Response:      result.Text,
+		Response:     result.Text,
 		DurationMs:   durationMs,
 		InputTokens:  result.Usage.InputTokens,
 		OutputTokens: result.Usage.OutputTokens,
+		AccountID:    result.AccountID,
+		AccountLabel: result.AccountLabel,
 	})
 }
 

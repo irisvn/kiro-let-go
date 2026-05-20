@@ -723,10 +723,12 @@ func (h *Handler) chatTestAccount(c *gin.Context) {
 	if !ok {
 		return
 	}
+	setRequestLogAccount(c, acc.ID, acc.Label)
 
 	started := time.Now()
-	text, status, kind, err := h.sendChatTest(ctx, acc, model, message)
+	text, usage, status, kind, err := h.sendChatTest(c, ctx, acc, model, message)
 	durationMs := time.Since(started).Milliseconds()
+	setRequestLogUsage(c, usage)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			writeError(c, http.StatusGatewayTimeout, "timeout_error", "chat test timed out after 30 seconds")
@@ -807,7 +809,7 @@ func (h *Handler) ensureFreshTokenWithContext(c *gin.Context, ctx context.Contex
 	return refreshed, true
 }
 
-func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model, message string) (string, int, string, error) {
+func (h *Handler) sendChatTest(c *gin.Context, ctx context.Context, acc *account.Account, model, message string) (string, kiro.Usage, int, string, error) {
 	payload := &kiro.KiroPayload{
 		ConversationState: kiro.ConversationState{
 			ConversationID:      uuid.NewString(),
@@ -835,12 +837,13 @@ func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model,
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", http.StatusInternalServerError, "internal_error", fmt.Errorf("marshal chat test payload: %w", err)
+		return "", kiro.Usage{}, http.StatusInternalServerError, "internal_error", fmt.Errorf("marshal chat test payload: %w", err)
 	}
+	setRequestLogKiroPayloadBytes(c, body)
 	region := accountAPIRegion(acc)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://q."+region+".amazonaws.com/generateAssistantResponse", bytes.NewReader(body))
 	if err != nil {
-		return "", http.StatusInternalServerError, "internal_error", fmt.Errorf("build chat test request: %w", err)
+		return "", kiro.Usage{}, http.StatusInternalServerError, "internal_error", fmt.Errorf("build chat test request: %w", err)
 	}
 	shadow := *acc
 	token := accountBearerToken(acc)
@@ -861,38 +864,41 @@ func (h *Handler) sendChatTest(ctx context.Context, acc *account.Account, model,
 	resp, err := chatClient.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")
+			return "", kiro.Usage{}, http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")
 		}
-		return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("generate assistant response: %w", err)
+		return "", kiro.Usage{}, http.StatusBadGateway, "upstream_error", fmt.Errorf("generate assistant response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
 		respBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("read Kiro error response: %w", readErr)
+			return "", kiro.Usage{}, http.StatusBadGateway, "upstream_error", fmt.Errorf("read Kiro error response: %w", readErr)
 		}
 		status, kind, msg := classifyKiroHTTPError(resp.StatusCode, respBody)
-		return "", status, kind, fmt.Errorf("generate assistant response: %s", msg)
+		return "", kiro.Usage{}, status, kind, fmt.Errorf("generate assistant response: %s", msg)
 	}
 
 	decoder := kiro.NewStreamDecoder(nil)
 	events := decoder.Decode(ctx, resp.Body, body)
 	var text strings.Builder
+	var usage kiro.Usage
 	for event := range events {
 		switch e := event.(type) {
 		case kiro.TextDelta:
 			text.WriteString(e.Text)
+		case kiro.Usage:
+			usage = e
 		case kiro.ErrorEvent:
-			return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("decode Kiro stream: %w", e.Err)
+			return "", usage, http.StatusBadGateway, "upstream_error", fmt.Errorf("decode Kiro stream: %w", e.Err)
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return "", http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")
+			return "", usage, http.StatusGatewayTimeout, "timeout_error", errors.New("chat test timed out after 30 seconds")
 		}
-		return "", http.StatusBadGateway, "upstream_error", fmt.Errorf("chat test canceled: %w", err)
+		return "", usage, http.StatusBadGateway, "upstream_error", fmt.Errorf("chat test canceled: %w", err)
 	}
-	return text.String(), http.StatusOK, "", nil
+	return text.String(), usage, http.StatusOK, "", nil
 }
 
 func accountNeedsRefresh(acc *account.Account) bool {

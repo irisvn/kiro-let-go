@@ -56,7 +56,7 @@ func TestDispatcherFailoverThirdAccountSucceeds(t *testing.T) {
 	defer server.Close()
 
 	d := newDispatcherForTest(store, server.URL, DispatcherConfig{MaxAttempts: 3, BaseRetryMs: 1}, nil)
-	events, err := d.Stream(ctx, dispatcherPayload(), account.SelectionHint{})
+	events, _, err := d.Stream(ctx, dispatcherPayload(), account.SelectionHint{})
 	require.NoError(t, err)
 	text := collectText(t, events)
 	assert.Equal(t, "winner", text)
@@ -94,7 +94,7 @@ func TestDispatcherRefreshesOnceOnAuthThenFailsOver(t *testing.T) {
 	defer server.Close()
 
 	d := newDispatcherForTest(store, server.URL, DispatcherConfig{MaxAttempts: 2, BaseRetryMs: 1}, fakeRefresh)
-	events, err := d.Stream(ctx, dispatcherPayload(), account.SelectionHint{})
+	events, _, err := d.Stream(ctx, dispatcherPayload(), account.SelectionHint{})
 	require.NoError(t, err)
 	assert.Equal(t, "fallback", collectText(t, events))
 	assert.Equal(t, int32(1), fakeRefresh.calls.Load())
@@ -135,7 +135,7 @@ func TestDispatcherAllAttemptsExhausted(t *testing.T) {
 	defer server.Close()
 
 	d := newDispatcherForTest(store, server.URL, DispatcherConfig{MaxAttempts: 2, BaseRetryMs: 1}, nil)
-	_, err := d.Stream(context.Background(), dispatcherPayload(), account.SelectionHint{})
+	_, _, err := d.Stream(context.Background(), dispatcherPayload(), account.SelectionHint{})
 	require.Error(t, err)
 	var classified *errs.Error
 	require.ErrorAs(t, err, &classified)

@@ -99,6 +99,7 @@ export function RequestLogPage() {
                   { label: 'Client IP', value: logDetailEntry.client_ip || '-' },
                   { label: 'Account', value: formatAccount(logDetailEntry) },
                   { label: 'Account ID', value: logDetailEntry.account_id || '-' },
+                  { label: 'Account Label', value: logDetailEntry.account_label || '-' },
                   { label: 'Input Tokens', value: String(logDetailEntry.input_tokens || 0) },
                   { label: 'Output Tokens', value: String(logDetailEntry.output_tokens || 0) },
                   { label: 'User Agent', value: logDetailEntry.user_agent || '-' },
@@ -119,6 +120,12 @@ export function RequestLogPage() {
                 <span className="text-slate-500 text-xs block mb-1">Request Body (truncated)</span>
                 <pre className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-xs overflow-auto max-h-48">{logDetailEntry.request_body || '-'}</pre>
               </div>
+              {logDetailEntry.kiro_payload && (
+                <div>
+                  <span className="text-slate-500 text-xs block mb-1">Kiro Payload (truncated)</span>
+                  <pre className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-xs overflow-auto max-h-64">{formatJSON(logDetailEntry.kiro_payload)}</pre>
+                </div>
+              )}
               <div>
                 <span className="text-slate-500 text-xs block mb-1">Response Snippet</span>
                 <pre className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-xs overflow-auto max-h-48">{logDetailEntry.response_snippet || '-'}</pre>
@@ -129,4 +136,12 @@ export function RequestLogPage() {
       )}
     </div>
   )
+}
+
+function formatJSON(value: string) {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
 }

@@ -65,7 +65,7 @@ func TestHandlerPostMessages_Streaming(t *testing.T) {
 	handler := NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil)
 	handler.newMessageID = func() string { return "msg_test_stream" }
 	handler.pingInterval = 5 * time.Millisecond
-	handler.dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+	handler.dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error) {
 		ch := make(chan kiro.StreamEvent, 8)
 		go func() {
 			defer close(ch)
@@ -78,7 +78,7 @@ func TestHandlerPostMessages_Streaming(t *testing.T) {
 			ch <- kiro.ToolUseStop{ID: "toolu_01"}
 			ch <- kiro.Stop{Reason: "end_turn"}
 		}()
-		return ch, nil
+		return ch, nil, nil
 	}
 
 	r := gin.New()
@@ -136,8 +136,8 @@ func TestHandlerPostMessages_StreamingDispatcherError(t *testing.T) {
 	t.Cleanup(overrideHandlerDeps(t))
 	handler := NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil)
 	handler.newMessageID = func() string { return "msg_test_error" }
-	handler.dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
-		return nil, errs.New(errs.ClassRateLimited, "", "slow down")
+	handler.dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error) {
+		return nil, nil, errs.New(errs.ClassRateLimited, "", "slow down")
 	}
 
 	r := gin.New()
@@ -167,7 +167,7 @@ func TestHandlerPostMessages_StreamingClientDisconnect(t *testing.T) {
 	handler.newMessageID = func() string { return "msg_test_disconnect" }
 	started := make(chan struct{})
 	stopped := make(chan struct{})
-	handler.dispatcherStream = func(_ *kiro.Dispatcher, ctx context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+	handler.dispatcherStream = func(_ *kiro.Dispatcher, ctx context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error) {
 		close(started)
 		ch := make(chan kiro.StreamEvent, 1)
 		ch <- kiro.TextDelta{Text: "hello"}
@@ -176,7 +176,7 @@ func TestHandlerPostMessages_StreamingClientDisconnect(t *testing.T) {
 			<-ctx.Done()
 			close(ch)
 		}()
-		return ch, nil
+		return ch, nil, nil
 	}
 
 	r := gin.New()

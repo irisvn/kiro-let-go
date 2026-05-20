@@ -47,6 +47,14 @@ type FullResponse struct {
 	Usage        Usage
 	ContextUsage *ContextUsage
 	StopReason   string
+	AccountID    string
+	AccountLabel string
+}
+
+// StreamMeta contains metadata about a streaming dispatch.
+type StreamMeta struct {
+	AccountID    string
+	AccountLabel string
 }
 
 // NewDispatcher creates a Dispatcher using the provided Kiro client and account manager.
@@ -58,17 +66,17 @@ func NewDispatcher(client *Client, manager *account.Manager, cfg DispatcherConfi
 }
 
 // Stream sends payload to Kiro and returns decoded streaming events.
-func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint account.SelectionHint) (<-chan StreamEvent, error) {
+func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint account.SelectionHint) (<-chan StreamEvent, *StreamMeta, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if d == nil || d.client == nil || d.manager == nil {
-		return nil, errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")
+		return nil, nil, errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")
 	}
 	cfg := normalizeDispatcherConfig(d.cfg)
 	requestPayload, err := json.Marshal(payload)
 	if err != nil {
-		return nil, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
+		return nil, nil, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
 	}
 
 	var lastErr error
@@ -76,21 +84,21 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		acq, err := d.manager.Acquire(ctx, hint)
 		if err != nil {
 			if errors.Is(err, account.NoAccountsAvailable) || errors.Is(err, account.ErrNoCandidates) {
-				return nil, err
+				return nil, nil, err
 			}
 			lastErr = classifyError(err)
 			if !isRecoverable(lastErr) {
-				return nil, lastErr
+				return nil, nil, lastErr
 			}
 			if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			continue
 		}
 		if acq == nil || acq.Account == nil {
 			lastErr = errs.New(errs.ClassRecoverable, "NIL_ACQUISITION", "account manager returned no account")
 			if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			continue
 		}
@@ -98,8 +106,9 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		req, err := buildKiroRequest(acq.Account, requestPayload, acq.Token, acq.Region)
 		if err != nil {
 			releaseFailure(acq, "build_request_error")
-			return nil, err
+			return nil, nil, err
 		}
+		meta := &StreamMeta{AccountID: acq.Account.ID, AccountLabel: acq.Account.Label}
 
 		body, resp, err := d.client.Stream(ctx, acq.Account, req)
 		if resp != nil && resp.StatusCode != http.StatusOK {
@@ -119,12 +128,12 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 				releaseFailure(acq, failureReason(classified))
 				hint.ExcludeIDs = appendExcluded(hint.ExcludeIDs, acq.Account.ID)
 				if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				continue
 			}
 			releaseFailure(acq, failureReason(classified))
-			return nil, classified
+			return nil, meta, classified
 		}
 		if err != nil {
 			if body != nil {
@@ -138,40 +147,44 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 				releaseFailure(acq, failureReason(classified))
 				hint.ExcludeIDs = appendExcluded(hint.ExcludeIDs, acq.Account.ID)
 				if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				continue
 			}
 			releaseFailure(acq, failureReason(classified))
-			return nil, classified
+			return nil, meta, classified
 		}
 		if body == nil {
 			lastErr = errs.New(errs.ClassRecoverable, "EMPTY_STREAM", "Kiro returned an empty stream body")
 			releaseFailure(acq, "empty_stream")
 			hint.ExcludeIDs = appendExcluded(hint.ExcludeIDs, acq.Account.ID)
 			if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			continue
 		}
 
-		return d.forwardStream(ctx, acq, body, requestPayload), nil
+		return d.forwardStream(ctx, acq, body, requestPayload), meta, nil
 	}
 
 	msg := "all Kiro accounts failed"
 	if lastErr != nil {
 		msg = fmt.Sprintf("%s: %v", msg, lastErr)
 	}
-	return nil, errs.New(errs.ClassFatal, "ALL_ACCOUNTS_FAILED", msg)
+	return nil, nil, errs.New(errs.ClassFatal, "ALL_ACCOUNTS_FAILED", msg)
 }
 
 // Once sends payload to Kiro and aggregates all streaming events into one response.
 func (d *Dispatcher) Once(ctx context.Context, payload *KiroPayload, hint account.SelectionHint) (FullResponse, error) {
-	events, err := d.Stream(ctx, payload, hint)
+	events, meta, err := d.Stream(ctx, payload, hint)
 	if err != nil {
 		return FullResponse{}, err
 	}
 	var full FullResponse
+	if meta != nil {
+		full.AccountID = meta.AccountID
+		full.AccountLabel = meta.AccountLabel
+	}
 	toolIndex := map[string]int{}
 	for event := range events {
 		switch e := event.(type) {
@@ -253,7 +266,7 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 	}
 
 	events := d.forwardStream(ctx, acq, body, requestPayload)
-	var full FullResponse
+	full := FullResponse{AccountID: acq.Account.ID, AccountLabel: acq.Account.Label}
 	toolIndex := map[string]int{}
 	for event := range events {
 		switch e := event.(type) {

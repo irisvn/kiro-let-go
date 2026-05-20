@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -21,10 +22,14 @@ const (
 	requestLogKeyInputTokens  = "rl_input_tokens"
 	requestLogKeyOutputTokens = "rl_output_tokens"
 	requestLogKeyStream       = "rl_stream"
+	requestLogKeyAccountID    = "rl_account_id"
+	requestLogKeyAccountLabel = "rl_account_label"
+	requestLogKeyKiroPayload  = "rl_kiro_payload"
+	requestLogPayloadLimit    = 500
 )
 
 type chatDispatcher interface {
-	Stream(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error)
+	Stream(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error)
 	Once(context.Context, *kiro.KiroPayload, account.SelectionHint) (kiro.FullResponse, error)
 }
 
@@ -68,6 +73,7 @@ func Handler(opts HandlerOptions) gin.HandlerFunc {
 			writeJSONError(c, requestError(err))
 			return
 		}
+		setRequestLogKiroPayload(c, payload)
 
 		hint := account.SelectionHint{
 			ConversationID: payload.ConversationState.ConversationID,
@@ -94,7 +100,8 @@ func handleStream(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletion
 		return
 	}
 
-	events, err := dispatcher.Stream(c.Request.Context(), payload, hint)
+	events, meta, err := dispatcher.Stream(c.Request.Context(), payload, hint)
+	setRequestLogAccount(c, meta)
 	if err != nil {
 		writer.WriteError(classifyHandlerError(err))
 		return
@@ -137,6 +144,29 @@ func handleStream(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletion
 	writer.WriteDone()
 }
 
+func setRequestLogAccount(c *gin.Context, meta *kiro.StreamMeta) {
+	if c == nil || meta == nil {
+		return
+	}
+	c.Set(requestLogKeyAccountID, meta.AccountID)
+	c.Set(requestLogKeyAccountLabel, meta.AccountLabel)
+}
+
+func setRequestLogKiroPayload(c *gin.Context, payload *kiro.KiroPayload) {
+	if c == nil || payload == nil {
+		return
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	value := string(body)
+	if len(value) > requestLogPayloadLimit {
+		value = value[:requestLogPayloadLimit] + "..."
+	}
+	c.Set(requestLogKeyKiroPayload, value)
+}
+
 func handleOnce(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletionRequest, payload *kiro.KiroPayload, hint account.SelectionHint, responseID string, created int64, includeReasoning bool) {
 	if dispatcher == nil {
 		writeJSONError(c, classifyHandlerError(errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")))
@@ -144,6 +174,8 @@ func handleOnce(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletionRe
 	}
 
 	full, err := dispatcher.Once(c.Request.Context(), payload, hint)
+	c.Set(requestLogKeyAccountID, full.AccountID)
+	c.Set(requestLogKeyAccountLabel, full.AccountLabel)
 	if err != nil {
 		writeJSONError(c, classifyHandlerError(err))
 		return

@@ -23,6 +23,7 @@ const (
 	CtxKeyStream       = "rl_stream"
 	CtxKeyAccountID    = "rl_account_id"
 	CtxKeyAccountLabel = "rl_account_label"
+	CtxKeyKiroPayload  = "rl_kiro_payload"
 )
 
 const requestLogSnippetLimit = 2048
@@ -120,6 +121,7 @@ func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
 			AccountID:       getStringFromContext(c, CtxKeyAccountID),
 			AccountLabel:    getStringFromContext(c, CtxKeyAccountLabel),
 			RequestBody:     requestBody,
+			KiroPayload:     getStringFromContext(c, CtxKeyKiroPayload),
 			ResponseSnippet: bodyWriter.snippet(),
 			Format:          requestFormat(c.Request.URL.Path),
 			UserAgent:       c.Request.UserAgent(),

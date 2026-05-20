@@ -16,21 +16,21 @@ import (
 )
 
 type fakeDispatcher struct {
-	streamFn func(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error)
+	streamFn func(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error)
 	onceFn   func(context.Context, *kiro.KiroPayload, account.SelectionHint) (kiro.FullResponse, error)
 	lastCtx  context.Context
 	lastHint account.SelectionHint
 	lastBody *kiro.KiroPayload
 }
 
-func (f *fakeDispatcher) Stream(ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+func (f *fakeDispatcher) Stream(ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error) {
 	f.lastCtx = ctx
 	f.lastHint = hint
 	f.lastBody = payload
 	if f.streamFn == nil {
 		ch := make(chan kiro.StreamEvent)
 		close(ch)
-		return ch, nil
+		return ch, nil, nil
 	}
 	return f.streamFn(ctx, payload, hint)
 }
@@ -125,7 +125,7 @@ func TestHandlerNonStreamingOmitsReasoningWhenNotRequested(t *testing.T) {
 func TestHandlerStreamingResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	dispatcher := &fakeDispatcher{
-		streamFn: func(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+		streamFn: func(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error) {
 			ch := make(chan kiro.StreamEvent, 16)
 			ch <- kiro.TextDelta{Text: "Hello"}
 			ch <- kiro.ThinkingDelta{Text: "thinking"}
@@ -137,7 +137,7 @@ func TestHandlerStreamingResponse(t *testing.T) {
 			ch <- kiro.Usage{InputTokens: 3, OutputTokens: 5}
 			ch <- kiro.Stop{Reason: "tool_use"}
 			close(ch)
-			return ch, nil
+			return ch, nil, nil
 		},
 	}
 

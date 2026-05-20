@@ -26,13 +26,17 @@ const (
 	requestLogKeyInputTokens  = "rl_input_tokens"
 	requestLogKeyOutputTokens = "rl_output_tokens"
 	requestLogKeyStream       = "rl_stream"
+	requestLogKeyAccountID    = "rl_account_id"
+	requestLogKeyAccountLabel = "rl_account_label"
+	requestLogKeyKiroPayload  = "rl_kiro_payload"
+	requestLogPayloadLimit    = 500
 )
 
-type dispatcherStreamFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error)
+type dispatcherStreamFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error)
 type dispatcherOnceFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (kiro.FullResponse, error)
 type idFunc func() string
 
-func defaultDispatcherStream(d *kiro.Dispatcher, ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+func defaultDispatcherStream(d *kiro.Dispatcher, ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (<-chan kiro.StreamEvent, *kiro.StreamMeta, error) {
 	return d.Stream(ctx, payload, hint)
 }
 
@@ -105,6 +109,7 @@ func (h *Handler) PostMessages(c *gin.Context) {
 		writeJSONError(c, http.StatusBadRequest, errs.New(errs.ClassFatal, "INVALID_REQUEST", err.Error()))
 		return
 	}
+	setRequestLogKiroPayload(c, payload)
 
 	inputTokens, err := h.estimateInputTokens(payload)
 	if err != nil {
@@ -169,7 +174,8 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 		return
 	}
 
-	events, err := h.dispatcherStream(h.dispatcher, c.Request.Context(), payload, hint)
+	events, meta, err := h.dispatcherStream(h.dispatcher, c.Request.Context(), payload, hint)
+	setRequestLogAccount(c, meta)
 	if err != nil {
 		h.writeStreamError(c.Request.Context(), writer, err)
 		return
@@ -219,6 +225,8 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 
 func (h *Handler) once(c *gin.Context, req *MessagesRequest, payload *kiro.KiroPayload, hint account.SelectionHint, inputTokens int) {
 	full, err := h.dispatcherOnce(h.dispatcher, c.Request.Context(), payload, hint)
+	c.Set(requestLogKeyAccountID, full.AccountID)
+	c.Set(requestLogKeyAccountLabel, full.AccountLabel)
 	if err != nil {
 		classified := classifyHandlerError(err)
 		if errors.Is(classified, context.Canceled) || errs.Is(classified, errs.ClassClientCanceled) {
@@ -253,6 +261,29 @@ func (h *Handler) once(c *gin.Context, req *MessagesRequest, payload *kiro.KiroP
 		return
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
+}
+
+func setRequestLogAccount(c *gin.Context, meta *kiro.StreamMeta) {
+	if c == nil || meta == nil {
+		return
+	}
+	c.Set(requestLogKeyAccountID, meta.AccountID)
+	c.Set(requestLogKeyAccountLabel, meta.AccountLabel)
+}
+
+func setRequestLogKiroPayload(c *gin.Context, payload *kiro.KiroPayload) {
+	if c == nil || payload == nil {
+		return
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	value := string(body)
+	if len(value) > requestLogPayloadLimit {
+		value = value[:requestLogPayloadLimit] + "..."
+	}
+	c.Set(requestLogKeyKiroPayload, value)
 }
 
 func (h *Handler) estimateInputTokens(payload *kiro.KiroPayload) (int, error) {

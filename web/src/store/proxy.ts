@@ -54,6 +54,7 @@ export interface LogEntry {
   user_agent: string
   error: string
   request_body: string
+  kiro_payload: string
   response_snippet: string
 }
 
