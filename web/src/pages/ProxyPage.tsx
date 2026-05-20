@@ -2,24 +2,37 @@ import { useEffect } from 'react'
 import { useProxyStore } from '@/store/proxy'
 import { useToastStore } from '@/store/toast'
 
+const MODELS = [
+  'claude-haiku-4.5',
+  'claude-sonnet-4.5',
+  'claude-sonnet-4.6',
+  'claude-opus-4.5',
+  'claude-opus-4.6',
+  'claude-opus-4.7',
+]
+
 export function ProxyPage() {
   const config = useProxyStore((s) => s.config)
-  const roundRobinResult = useProxyStore((s) => s.roundRobinResult)
-  const roundRobinLoading = useProxyStore((s) => s.roundRobinLoading)
-  const roundRobinCount = useProxyStore((s) => s.roundRobinCount)
+  const apiTestFormat = useProxyStore((s) => s.apiTestFormat)
+  const apiTestModel = useProxyStore((s) => s.apiTestModel)
+  const apiTestMessage = useProxyStore((s) => s.apiTestMessage)
+  const apiTestLoading = useProxyStore((s) => s.apiTestLoading)
+  const apiTestResult = useProxyStore((s) => s.apiTestResult)
   const loadProxyConfig = useProxyStore((s) => s.loadProxyConfig)
-  const testRoundRobin = useProxyStore((s) => s.testRoundRobin)
-  const setRoundRobinCount = useProxyStore((s) => s.setRoundRobinCount)
+  const testProxyAPI = useProxyStore((s) => s.testProxyAPI)
+  const setApiTestFormat = useProxyStore((s) => s.setApiTestFormat)
+  const setApiTestModel = useProxyStore((s) => s.setApiTestModel)
+  const setApiTestMessage = useProxyStore((s) => s.setApiTestMessage)
   const toast = useToastStore((s) => s.addToast)
 
   useEffect(() => {
     loadProxyConfig().catch((e) => toast(e.message, 'error'))
   }, [loadProxyConfig, toast])
 
-  const handleRoundRobin = async () => {
+  const handleTest = async () => {
     try {
-      await testRoundRobin()
-      toast('Round-robin test completed', 'success')
+      await testProxyAPI()
+      toast('API test completed', 'success')
     } catch (e) {
       toast((e as Error).message, 'error')
     }
@@ -91,38 +104,111 @@ export function ProxyPage() {
       )}
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Round-Robin Test</h3>
-          <div className="flex items-center gap-2">
-            <input
-              type="number" min={1} max={20}
-              value={roundRobinCount}
-              onChange={(e) => setRoundRobinCount(Number(e.target.value))}
-              className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
-            />
-            <button onClick={handleRoundRobin} disabled={roundRobinLoading} className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors flex items-center gap-2">
-              {roundRobinLoading && <span className="spinner" />}Run Test
-            </button>
-          </div>
-        </div>
-        {roundRobinResult ? (
-          <div className="space-y-2 text-sm">
-            {roundRobinResult.results.map((r) => (
-              <div key={r.attempt} className="flex items-center gap-2 font-mono">
-                <span className="text-slate-500">#{r.attempt}</span>
-                <span className="text-slate-600">→</span>
-                <span className="text-slate-200">{r.account_label || r.account_id || '-'}</span>
-                <span className={r.success ? 'text-emerald-400' : 'text-red-400'}>{r.success ? '✓' : '✕'}</span>
-                {r.error && <span className="text-red-400 text-xs">{r.error}</span>}
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4">API Test</h3>
+
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="flex-1 min-w-0">
+              <label className="block text-xs text-slate-500 mb-1.5">Format</label>
+              <div className="flex rounded-lg overflow-hidden border border-slate-700">
+                <button
+                  onClick={() => setApiTestFormat('anthropic')}
+                  className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                    apiTestFormat === 'anthropic'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  }`}
+                >
+                  Anthropic
+                </button>
+                <button
+                  onClick={() => setApiTestFormat('openai')}
+                  className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                    apiTestFormat === 'openai'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  }`}
+                >
+                  OpenAI
+                </button>
               </div>
-            ))}
-            <div className="pt-2 border-t border-slate-800 text-slate-400">
-              Summary: <span className="font-mono text-slate-200">{Object.entries(roundRobinResult.summary || {}).map(([k, v]) => `${k}: ${v}`).join(', ') || '-'}</span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <label className="block text-xs text-slate-500 mb-1.5">Model</label>
+              <select
+                value={apiTestModel}
+                onChange={(e) => setApiTestModel(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                {MODELS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex-[2] min-w-0">
+              <label className="block text-xs text-slate-500 mb-1.5">Message</label>
+              <input
+                type="text"
+                value={apiTestMessage}
+                onChange={(e) => setApiTestMessage(e.target.value)}
+                placeholder="Hi"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
             </div>
           </div>
-        ) : (
-          <p className="text-slate-500 text-sm">Acquire + release only; no upstream chat requests are sent.</p>
-        )}
+
+          <button
+            onClick={handleTest}
+            disabled={apiTestLoading}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors flex items-center gap-2"
+          >
+            {apiTestLoading && <span className="spinner" />}
+            Send Test
+          </button>
+
+          {apiTestResult && (
+            <div className={`rounded-lg border p-4 text-sm ${
+              apiTestResult.success
+                ? 'bg-slate-800/50 border-emerald-500/30'
+                : 'bg-slate-800/50 border-red-500/30'
+            }`}>
+              <div className="flex items-center gap-3 mb-2">
+                <span className={apiTestResult.success ? 'text-emerald-400' : 'text-red-400'}>
+                  {apiTestResult.success ? '✓' : '✕'} {apiTestResult.success ? 'Success' : 'Failed'}
+                </span>
+                {apiTestResult.success && (
+                  <>
+                    <span className="text-slate-500">|</span>
+                    <span className="text-slate-400">Model: <span className="text-slate-200 font-mono">{apiTestResult.model}</span></span>
+                  </>
+                )}
+              </div>
+              {apiTestResult.success && (
+                <div className="flex items-center gap-3 mb-3 text-xs text-slate-400">
+                  <span>Duration: <span className="text-slate-200 font-mono">{(apiTestResult.duration_ms / 1000).toFixed(1)}s</span></span>
+                  <span className="text-slate-600">|</span>
+                  <span>Tokens: <span className="text-slate-200 font-mono">{apiTestResult.input_tokens} in / {apiTestResult.output_tokens} out</span></span>
+                  {apiTestResult.account_label && (
+                    <>
+                      <span className="text-slate-600">|</span>
+                      <span>Account: <span className="text-slate-200 font-mono">{apiTestResult.account_label}</span></span>
+                    </>
+                  )}
+                </div>
+              )}
+              {apiTestResult.success && apiTestResult.response && (
+                <div className="bg-slate-900/50 rounded-md p-3 text-slate-200 font-mono text-xs whitespace-pre-wrap break-words">
+                  {apiTestResult.response}
+                </div>
+              )}
+              {apiTestResult.error && (
+                <div className="text-red-400 text-xs mt-1">{apiTestResult.error}</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -239,6 +239,7 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.GET("/proxy/config", h.getProxyConfig)
 	adminGroup.GET("/proxy/log", h.getProxyLog)
 	adminGroup.POST("/proxy/test-roundrobin", h.testRoundRobin)
+	adminGroup.POST("/proxy/test-api", h.testProxyAPI)
 }
 
 func (h *Handler) createAccount(c *gin.Context) {

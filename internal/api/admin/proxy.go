@@ -10,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/irisvn/kiro-let-go/internal/account"
 	"github.com/irisvn/kiro-let-go/internal/config"
+	"github.com/irisvn/kiro-let-go/internal/converter"
+	"github.com/irisvn/kiro-let-go/internal/kiro"
 )
 
 type RequestLogEntry struct {
@@ -151,6 +153,99 @@ func (h *Handler) getProxyLog(c *gin.Context) {
 		entries = entries[:limit]
 	}
 	c.JSON(http.StatusOK, entries)
+}
+
+type apiTestRequest struct {
+	Format  string `json:"format"`  // "anthropic" or "openai"
+	Model   string `json:"model"`
+	Message string `json:"message"`
+}
+
+type apiTestResponse struct {
+	Success      bool   `json:"success"`
+	Format       string `json:"format"`
+	Model        string `json:"model"`
+	Response      string `json:"response"`
+	DurationMs   int64  `json:"duration_ms"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	AccountID    string `json:"account_id,omitempty"`
+	AccountLabel string `json:"account_label,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+func (h *Handler) testProxyAPI(c *gin.Context) {
+	if h.dispatch == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "dispatcher is not configured")
+		return
+	}
+
+	var req apiTestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+
+	format := strings.TrimSpace(strings.ToLower(req.Format))
+	if format == "" {
+		format = "anthropic"
+	}
+	if format != "anthropic" && format != "openai" {
+		writeError(c, http.StatusBadRequest, "validation_error", "format must be 'anthropic' or 'openai'")
+		return
+	}
+
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = "claude-haiku-4.5"
+	}
+	model = kiro.MapModel(model)
+
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = "Hi"
+	}
+
+	normalized := &converter.NormalizedRequest{
+		Model:    model,
+		Messages: []converter.NormalizedMessage{{Role: "user", Parts: []converter.NormalizedPart{converter.Text{Text: message}}}},
+		MaxOutputTokens: 100,
+		Stream:          false,
+	}
+
+	payload, err := converter.NormalizedToKiro(normalized, "")
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "build kiro payload: "+err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+
+	started := time.Now()
+	result, err := h.dispatch.Once(ctx, payload, account.SelectionHint{Model: model})
+	durationMs := time.Since(started).Milliseconds()
+
+	if err != nil {
+		c.JSON(http.StatusOK, apiTestResponse{
+			Success:    false,
+			Format:     format,
+			Model:      model,
+			DurationMs: durationMs,
+			Error:      err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, apiTestResponse{
+		Success:      true,
+		Format:       format,
+		Model:        model,
+		Response:      result.Text,
+		DurationMs:   durationMs,
+		InputTokens:  result.Usage.InputTokens,
+		OutputTokens: result.Usage.OutputTokens,
+	})
 }
 
 func (h *Handler) testRoundRobin(c *gin.Context) {

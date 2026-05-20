@@ -23,9 +23,17 @@ export interface ProxyConfig {
   probabilistic_retry_chance: number
 }
 
-export interface RoundRobinResult {
-  results: { attempt: number; account_id: string; account_label: string; success: boolean; error?: string }[]
-  summary: Record<string, number>
+export interface ApiTestResult {
+  success: boolean
+  format: string
+  model: string
+  response: string
+  duration_ms: number
+  input_tokens: number
+  output_tokens: number
+  account_id?: string
+  account_label?: string
+  error?: string
 }
 
 export interface LogEntry {
@@ -52,22 +60,28 @@ export interface LogEntry {
 interface ProxyState {
   config: ProxyConfig | null
   log: LogEntry[]
-  roundRobinResult: RoundRobinResult | null
-  roundRobinLoading: boolean
-  roundRobinCount: number
+  apiTestFormat: 'anthropic' | 'openai'
+  apiTestModel: string
+  apiTestMessage: string
+  apiTestLoading: boolean
+  apiTestResult: ApiTestResult | null
   loadProxyConfig: () => Promise<void>
   loadProxyLog: () => Promise<void>
-  testRoundRobin: () => Promise<void>
-  setRoundRobinCount: (count: number) => void
+  testProxyAPI: () => Promise<void>
+  setApiTestFormat: (format: 'anthropic' | 'openai') => void
+  setApiTestModel: (model: string) => void
+  setApiTestMessage: (message: string) => void
   clearLog: () => void
 }
 
 export const useProxyStore = create<ProxyState>((set, get) => ({
   config: null,
   log: [],
-  roundRobinResult: null,
-  roundRobinLoading: false,
-  roundRobinCount: 5,
+  apiTestFormat: 'anthropic',
+  apiTestModel: 'claude-haiku-4.5',
+  apiTestMessage: 'Hi',
+  apiTestLoading: false,
+  apiTestResult: null,
 
   loadProxyConfig: async () => {
     try {
@@ -87,21 +101,24 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     }
   },
 
-  testRoundRobin: async () => {
-    set({ roundRobinLoading: true, roundRobinResult: null })
+  testProxyAPI: async () => {
+    set({ apiTestLoading: true, apiTestResult: null })
     try {
-      const result = await apiCall<RoundRobinResult>('POST', '/admin/proxy/test-roundrobin', {
-        count: get().roundRobinCount,
+      const result = await apiCall<ApiTestResult>('POST', '/admin/proxy/test-api', {
+        format: get().apiTestFormat,
+        model: get().apiTestModel,
+        message: get().apiTestMessage,
       })
-      set({ roundRobinResult: result })
-      await get().loadProxyConfig()
+      set({ apiTestResult: result })
     } catch (e) {
-      throw new Error('Round-robin test failed: ' + handleApiError(e))
+      set({ apiTestResult: { success: false, format: get().apiTestFormat, model: get().apiTestModel, response: '', duration_ms: 0, input_tokens: 0, output_tokens: 0, error: handleApiError(e) } })
     } finally {
-      set({ roundRobinLoading: false })
+      set({ apiTestLoading: false })
     }
   },
 
-  setRoundRobinCount: (count) => set({ roundRobinCount: count }),
+  setApiTestFormat: (format) => set({ apiTestFormat: format }),
+  setApiTestModel: (model) => set({ apiTestModel: model }),
+  setApiTestMessage: (message) => set({ apiTestMessage: message }),
   clearLog: () => set({ log: [] }),
 }))
