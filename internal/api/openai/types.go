@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type ChatCompletionRequest struct {
@@ -172,6 +173,9 @@ type ModelInfo struct {
 func (r *ChatCompletionRequest) Validate() error {
 	if r.Model == "" {
 		return errors.New("model is required")
+	}
+	if !strings.Contains(strings.ToLower(r.Model), "claude") {
+		return fmt.Errorf("model must be a Claude model (got: %s)", r.Model)
 	}
 	if len(r.Messages) == 0 {
 		return errors.New("messages is required")

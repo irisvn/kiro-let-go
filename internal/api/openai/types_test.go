@@ -191,7 +191,7 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("missing messages", func(t *testing.T) {
-		r := ChatCompletionRequest{Model: "gpt-4o"}
+		r := ChatCompletionRequest{Model: "claude-sonnet-4.6"}
 		err := r.Validate()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "messages")
@@ -199,7 +199,7 @@ func TestValidate(t *testing.T) {
 
 	t.Run("invalid role", func(t *testing.T) {
 		r := ChatCompletionRequest{
-			Model:    "gpt-4o",
+			Model:    "claude-sonnet-4.6",
 			Messages: []ChatMessage{{Role: "invalid", Content: MessageContent{Text: "hi"}}},
 		}
 		err := r.Validate()
@@ -209,7 +209,7 @@ func TestValidate(t *testing.T) {
 
 	t.Run("tool message without tool_call_id", func(t *testing.T) {
 		r := ChatCompletionRequest{
-			Model:    "gpt-4o",
+			Model:    "claude-sonnet-4.6",
 			Messages: []ChatMessage{{Role: "tool", Content: MessageContent{Text: "result"}}},
 		}
 		err := r.Validate()
@@ -219,7 +219,7 @@ func TestValidate(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		r := ChatCompletionRequest{
-			Model: "gpt-4o",
+			Model: "claude-sonnet-4.6",
 			Messages: []ChatMessage{
 				{Role: "system", Content: MessageContent{Text: "sys"}},
 				{Role: "user", Content: MessageContent{Text: "hi"}},
@@ -228,5 +228,15 @@ func TestValidate(t *testing.T) {
 			},
 		}
 		require.NoError(t, r.Validate())
+	})
+
+	t.Run("non-Claude model", func(t *testing.T) {
+		r := ChatCompletionRequest{
+			Model:    "gpt-4o",
+			Messages: []ChatMessage{{Role: "user", Content: MessageContent{Text: "hi"}}},
+		}
+		err := r.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Claude model")
 	})
 }

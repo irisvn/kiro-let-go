@@ -8,6 +8,7 @@ import (
 
 const modelsCreatedAt int64 = 1735689600
 
+// supportedModels is read-only after package init.
 var supportedModels = []ModelInfo{
 	{ID: "claude-sonnet-4.5", Object: "model", Created: modelsCreatedAt, OwnedBy: "kiro"},
 	{ID: "claude-sonnet-4.6", Object: "model", Created: modelsCreatedAt, OwnedBy: "kiro"},

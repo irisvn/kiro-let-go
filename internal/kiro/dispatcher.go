@@ -25,6 +25,7 @@ const (
 	maxDispatcherBackoff         = 2 * time.Second
 )
 
+// Dispatcher sends Kiro payloads through available accounts with failover.
 type Dispatcher struct {
 	client  *Client
 	manager *account.Manager
@@ -32,11 +33,13 @@ type Dispatcher struct {
 	logger  *slog.Logger
 }
 
+// DispatcherConfig configures retry behavior for Dispatcher.
 type DispatcherConfig struct {
 	MaxAttempts int
 	BaseRetryMs int
 }
 
+// FullResponse contains the aggregated result of a non-streaming dispatch.
 type FullResponse struct {
 	Text         string
 	Thinking     string
@@ -46,6 +49,7 @@ type FullResponse struct {
 	StopReason   string
 }
 
+// NewDispatcher creates a Dispatcher using the provided Kiro client and account manager.
 func NewDispatcher(client *Client, manager *account.Manager, cfg DispatcherConfig, logger *slog.Logger) *Dispatcher {
 	if logger == nil {
 		logger = slog.Default()
@@ -53,6 +57,7 @@ func NewDispatcher(client *Client, manager *account.Manager, cfg DispatcherConfi
 	return &Dispatcher{client: client, manager: manager, cfg: normalizeDispatcherConfig(cfg), logger: logger}
 }
 
+// Stream sends payload to Kiro and returns decoded streaming events.
 func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint account.SelectionHint) (<-chan StreamEvent, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -99,7 +104,9 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		body, resp, err := d.client.Stream(ctx, acq.Account, req)
 		if resp != nil && resp.StatusCode != http.StatusOK {
 			if body != nil {
-				_ = body.Close()
+				if err := body.Close(); err != nil {
+					d.logger.Warn("failed to close response body", "error", err)
+				}
 			}
 			classified := classifyResponse(resp, err)
 			lastErr = classified
@@ -121,7 +128,9 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		}
 		if err != nil {
 			if body != nil {
-				_ = body.Close()
+				if err := body.Close(); err != nil {
+					d.logger.Warn("failed to close response body", "error", err)
+				}
 			}
 			classified := classifyError(err)
 			lastErr = classified
@@ -156,6 +165,7 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 	return nil, errs.New(errs.ClassFatal, "ALL_ACCOUNTS_FAILED", msg)
 }
 
+// Once sends payload to Kiro and aggregates all streaming events into one response.
 func (d *Dispatcher) Once(ctx context.Context, payload *KiroPayload, hint account.SelectionHint) (FullResponse, error) {
 	events, err := d.Stream(ctx, payload, hint)
 	if err != nil {

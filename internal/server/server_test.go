@@ -238,7 +238,7 @@ func TestAdminAuthXAPIKeyNotAllowed(t *testing.T) {
 func TestRunAndShutdown(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	deps := testDeps(t)
-	deps.Cfg.Server.Port = 18765
+	deps.Cfg.Server.Port = 0
 	srv := New(deps)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -249,9 +249,14 @@ func TestRunAndShutdown(t *testing.T) {
 		errCh <- srv.Run(ctx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	var addr string
+	select {
+	case addr = <-srv.boundAddr:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not start")
+	}
 
-	resp, err := http.Get("http://127.0.0.1:18765/health")
+	resp, err := http.Get("http://" + addr + "/health")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()

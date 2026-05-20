@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -36,6 +37,7 @@ type Server struct {
 	manager      *account.Manager
 	dispatcher   *kiro.Dispatcher
 	quotaFetcher *account.Fetcher
+	boundAddr    chan string
 }
 
 func New(deps Deps) *Server {
@@ -80,6 +82,7 @@ func New(deps Deps) *Server {
 		manager:      deps.Manager,
 		dispatcher:   deps.Dispatcher,
 		quotaFetcher: deps.QuotaFetcher,
+		boundAddr:    make(chan string, 1),
 	}
 }
 
@@ -94,8 +97,18 @@ func (s *Server) Run(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		s.logger.Info("server starting", slog.String("addr", addr))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		actualAddr := ln.Addr().String()
+		select {
+		case s.boundAddr <- actualAddr:
+		default:
+		}
+		s.logger.Info("server starting", slog.String("addr", actualAddr))
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
 	}()

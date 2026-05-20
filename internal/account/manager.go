@@ -15,17 +15,20 @@ import (
 
 const refreshSkew = time.Minute
 
+// ManagerConfig controls account selection behavior.
 type ManagerConfig struct {
 	StickySession bool
 	DefaultRegion string
 }
 
+// SelectionHint provides request context used to choose an account.
 type SelectionHint struct {
 	ConversationID string
 	Model          string
 	ExcludeIDs     []string
 }
 
+// Acquisition contains an acquired account, token, region, and release callbacks.
 type Acquisition struct {
 	Account        *Account
 	Token          string
@@ -34,16 +37,20 @@ type Acquisition struct {
 	ReleaseFailure func(reason string)
 }
 
+// SocialRefresher refreshes OAuth/social-account credentials.
 type SocialRefresher interface {
 	Refresh(ctx context.Context, acc *Account) (newAccessToken, newRefreshToken string, expiresAt time.Time, err error)
 }
 
+// APIKeyRefresher refreshes or validates API-key credentials.
 type APIKeyRefresher interface {
 	Refresh(ctx context.Context, acc *Account) (token string, expiresAt time.Time, err error)
 }
 
+// ManagerOption customizes a Manager during construction.
 type ManagerOption func(*Manager)
 
+// Manager acquires, refreshes, and records health for configured accounts.
 type Manager struct {
 	store      *Store
 	balancer   Balancer
@@ -58,6 +65,7 @@ type Manager struct {
 	lastSuccessfulID string
 }
 
+// NewManager creates an account manager with optional balancer, circuit breaker, and refreshers.
 func NewManager(store *Store, balancer Balancer, circuit *CircuitBreaker, cfg ManagerConfig, logger *slog.Logger, opts ...ManagerOption) *Manager {
 	if balancer == nil {
 		balancer = &RoundRobin{}
@@ -75,13 +83,17 @@ func NewManager(store *Store, balancer Balancer, circuit *CircuitBreaker, cfg Ma
 	return m
 }
 
+// WithSocialAuth configures the social-account refresher used by a Manager.
 func WithSocialAuth(auth SocialRefresher) ManagerOption {
 	return func(m *Manager) { m.socialAuth = auth }
 }
+
+// WithAPIKeyAuth configures the API-key refresher used by a Manager.
 func WithAPIKeyAuth(auth APIKeyRefresher) ManagerOption {
 	return func(m *Manager) { m.apiKeyAuth = auth }
 }
 
+// Acquire selects and prepares an account for a request.
 func (m *Manager) Acquire(ctx context.Context, hint SelectionHint) (*Acquisition, error) {
 	if m == nil || m.store == nil {
 		return nil, fmt.Errorf("account manager store is nil")
@@ -107,6 +119,7 @@ func (m *Manager) Acquire(ctx context.Context, hint SelectionHint) (*Acquisition
 	return m.acquireAccount(ctx, chosen)
 }
 
+// Refresh forces a credential refresh for the specified account.
 func (m *Manager) Refresh(ctx context.Context, accountID string) error {
 	if m == nil || m.store == nil {
 		return fmt.Errorf("account manager store is nil")
@@ -119,6 +132,7 @@ func (m *Manager) Refresh(ctx context.Context, accountID string) error {
 	return err
 }
 
+// List returns all accounts with circuit-breaker disabled reasons applied.
 func (m *Manager) List(ctx context.Context) ([]*Account, error) {
 	if m == nil || m.store == nil {
 		return nil, fmt.Errorf("account manager store is nil")

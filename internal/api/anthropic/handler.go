@@ -19,22 +19,32 @@ import (
 	"github.com/irisvn/kiro-let-go/internal/kiro"
 )
 
-var anthropicPingInterval = 25 * time.Second
+const anthropicPingInterval = 25 * time.Second
 
-var (
-	dispatcherStream = func(d *kiro.Dispatcher, ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (<-chan kiro.StreamEvent, error) {
-		return d.Stream(ctx, payload, hint)
-	}
-	dispatcherOnce = func(d *kiro.Dispatcher, ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (kiro.FullResponse, error) {
-		return d.Once(ctx, payload, hint)
-	}
-	newMessageID = func() string { return "msg_" + uuid.NewString() }
-)
+type dispatcherStreamFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error)
+type dispatcherOnceFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (kiro.FullResponse, error)
+type idFunc func() string
+
+func defaultDispatcherStream(d *kiro.Dispatcher, ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+	return d.Stream(ctx, payload, hint)
+}
+
+func defaultDispatcherOnce(d *kiro.Dispatcher, ctx context.Context, payload *kiro.KiroPayload, hint account.SelectionHint) (kiro.FullResponse, error) {
+	return d.Once(ctx, payload, hint)
+}
+
+func defaultNewMessageID() string {
+	return "msg_" + uuid.NewString()
+}
 
 type Handler struct {
-	dispatcher *kiro.Dispatcher
-	tokenizer  *kiro.Estimator
-	logger     *slog.Logger
+	dispatcher       *kiro.Dispatcher
+	tokenizer        *kiro.Estimator
+	logger           *slog.Logger
+	dispatcherStream dispatcherStreamFunc
+	dispatcherOnce   dispatcherOnceFunc
+	newMessageID     idFunc
+	pingInterval     time.Duration
 }
 
 func NewHandler(dispatcher *kiro.Dispatcher, tokenizer *kiro.Estimator, logger *slog.Logger) *Handler {
@@ -44,7 +54,15 @@ func NewHandler(dispatcher *kiro.Dispatcher, tokenizer *kiro.Estimator, logger *
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{dispatcher: dispatcher, tokenizer: tokenizer, logger: logger}
+	return &Handler{
+		dispatcher:       dispatcher,
+		tokenizer:        tokenizer,
+		logger:           logger,
+		dispatcherStream: defaultDispatcherStream,
+		dispatcherOnce:   defaultDispatcherOnce,
+		newMessageID:     defaultNewMessageID,
+		pingInterval:     anthropicPingInterval,
+	}
 }
 
 func (h *Handler) Register(r gin.IRouter) {
@@ -134,13 +152,13 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 	setSSEHeaders(c)
 	flusher.Flush()
 
-	writer := NewSSEWriter(c.Writer, newMessageID(), req.Model)
+	writer := NewSSEWriter(c.Writer, h.newMessageID(), req.Model)
 	if err := writer.WriteMessageStart(inputTokens); err != nil {
 		h.logWriteError("message_start", err)
 		return
 	}
 
-	events, err := dispatcherStream(h.dispatcher, c.Request.Context(), payload, hint)
+	events, err := h.dispatcherStream(h.dispatcher, c.Request.Context(), payload, hint)
 	if err != nil {
 		h.writeStreamError(c.Request.Context(), writer, err)
 		return
@@ -185,7 +203,7 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 }
 
 func (h *Handler) once(c *gin.Context, req *MessagesRequest, payload *kiro.KiroPayload, hint account.SelectionHint, inputTokens int) {
-	full, err := dispatcherOnce(h.dispatcher, c.Request.Context(), payload, hint)
+	full, err := h.dispatcherOnce(h.dispatcher, c.Request.Context(), payload, hint)
 	if err != nil {
 		classified := classifyHandlerError(err)
 		if errors.Is(classified, context.Canceled) || errs.Is(classified, errs.ClassClientCanceled) {
@@ -197,7 +215,7 @@ func (h *Handler) once(c *gin.Context, req *MessagesRequest, payload *kiro.KiroP
 	}
 
 	resp := MessagesResponse{
-		ID:      newMessageID(),
+		ID:      h.newMessageID(),
 		Type:    "message",
 		Role:    "assistant",
 		Content: buildResponseContent(full),
@@ -233,10 +251,10 @@ func (h *Handler) estimateInputTokens(payload *kiro.KiroPayload) (int, error) {
 
 func (h *Handler) runPingLoop(ctx context.Context, writer *SSEWriter, activity <-chan struct{}, done <-chan struct{}, pingDone chan<- struct{}) {
 	defer close(pingDone)
-	if anthropicPingInterval <= 0 {
+	if h.pingInterval <= 0 {
 		return
 	}
-	timer := time.NewTimer(anthropicPingInterval)
+	timer := time.NewTimer(h.pingInterval)
 	defer timer.Stop()
 
 	for {
@@ -252,13 +270,13 @@ func (h *Handler) runPingLoop(ctx context.Context, writer *SSEWriter, activity <
 				default:
 				}
 			}
-			timer.Reset(anthropicPingInterval)
+			timer.Reset(h.pingInterval)
 		case <-timer.C:
 			if err := writer.WritePing(); err != nil {
 				h.logWriteError("ping", err)
 				return
 			}
-			timer.Reset(anthropicPingInterval)
+			timer.Reset(h.pingInterval)
 		}
 	}
 }

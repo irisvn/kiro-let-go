@@ -9,3 +9,6 @@
   - The Anthropic count_tokens endpoint can share the existing message/system/tool normalization path and reuse normalizedToKiro plus estimateInputTokens for parity with /v1/messages token accounting.
   - Switching circuit retries to rand.Float64() keeps the breaker distribution test valid while removing deterministic retry counters from both the breaker and manager.
   - Example config coverage can load configs/config.example.json directly after replacing REPLACE_ME_* placeholders; Validate() then confirms the file is production-ready.
+
+- F2/F4 fixes: Anthropic handler test seams should live on Handler fields, not mutable package vars; server Run can use net.Listen + Serve so tests with port 0 can read the actual bound address through an unexported channel.
+- Claude-only API validation means existing OpenAI tests must use Claude model IDs except for explicit non-Claude rejection cases.

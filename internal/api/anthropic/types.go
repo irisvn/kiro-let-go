@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // MessagesRequest is the request body for the Anthropic Messages API.
@@ -27,6 +28,9 @@ type MessagesRequest struct {
 func (r *MessagesRequest) Validate() error {
 	if r.Model == "" {
 		return errors.New("model is required")
+	}
+	if !strings.Contains(strings.ToLower(r.Model), "claude") {
+		return fmt.Errorf("model must be a Claude model (got: %s)", r.Model)
 	}
 	if r.MaxTokens <= 0 {
 		return errors.New("max_tokens must be greater than 0")

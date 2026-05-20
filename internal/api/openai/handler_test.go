@@ -66,7 +66,7 @@ func TestHandlerNonStreamingResponse(t *testing.T) {
 		NewID:      func() string { return "test-id" },
 	}))
 
-	body := `{"model":"sonnet","reasoning_effort":"medium","messages":[{"role":"user","content":"Hi"}]}`
+	body := `{"model":"claude-sonnet-4.6","reasoning_effort":"medium","messages":[{"role":"user","content":"Hi"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()
@@ -85,7 +85,7 @@ func TestHandlerNonStreamingResponse(t *testing.T) {
 	require.Equal(t, "chatcmpl-test-id", got.ID)
 	require.Equal(t, "chat.completion", got.Object)
 	require.Equal(t, int64(1700000000), got.Created)
-	require.Equal(t, "sonnet", got.Model)
+	require.Equal(t, "claude-sonnet-4.6", got.Model)
 	require.Len(t, got.Choices, 1)
 	require.Equal(t, "assistant", got.Choices[0].Message.Role)
 	require.Equal(t, "hello", got.Choices[0].Message.Content.Text)
@@ -109,7 +109,7 @@ func TestHandlerNonStreamingOmitsReasoningWhenNotRequested(t *testing.T) {
 	r := gin.New()
 	r.POST("/v1/chat/completions", Handler(HandlerOptions{Dispatcher: dispatcher}))
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"gpt-4o","messages":[{"role":"user","content":"Hi"}]}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"claude-sonnet-4.6","messages":[{"role":"user","content":"Hi"}]}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()
 
@@ -148,7 +148,7 @@ func TestHandlerStreamingResponse(t *testing.T) {
 		NewID:      func() string { return "stream-id" },
 	}))
 
-	body := `{"model":"gpt-4o","stream":true,"reasoning_effort":"low","messages":[{"role":"user","content":"Hi"}]}`
+	body := `{"model":"claude-sonnet-4.6","stream":true,"reasoning_effort":"low","messages":[{"role":"user","content":"Hi"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()

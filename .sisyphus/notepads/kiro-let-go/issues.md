@@ -12,3 +12,9 @@
 
 ## T36 Admin REST API - 2026-05-20
 - `go test ./...` is still blocked by pre-existing failures outside T36: an `internal/api/openai` ↔ `internal/converter` import cycle and unresolved `internal/api/anthropic` handler compile errors (`anthropicToNormalized` / `normalizedToKiro` undefined, stale unused imports).
+
+## F4 Scope Fidelity Audit - 2026-05-20
+- REJECT: Chat request validation accepts arbitrary model IDs. `internal/kiro/types.go:34-35` returns unknown model names unchanged, while `internal/api/openai/types.go:172-193` and `internal/api/anthropic/types.go:26-42` only require a non-empty model. This allows GPT/Gemini/non-Claude requests despite the agreed Claude-only scope.
+
+## F2/F4 Remediation - 2026-05-20
+- No unresolved blockers after remediation: `go build -buildvcs=false ./...`, `go test -buildvcs=false ./...`, and `go vet ./...` pass.

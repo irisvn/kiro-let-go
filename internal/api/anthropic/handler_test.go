@@ -19,7 +19,8 @@ import (
 
 func TestHandlerPostMessages_NonStreaming(t *testing.T) {
 	t.Cleanup(overrideHandlerDeps(t))
-	dispatcherOnce = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (kiro.FullResponse, error) {
+	handler := NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil)
+	handler.dispatcherOnce = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (kiro.FullResponse, error) {
 		return kiro.FullResponse{
 			Thinking:   "plan",
 			Text:       "hello world",
@@ -28,10 +29,10 @@ func TestHandlerPostMessages_NonStreaming(t *testing.T) {
 			StopReason: "end_turn",
 		}, nil
 	}
-	newMessageID = func() string { return "msg_test_nonstream" }
+	handler.newMessageID = func() string { return "msg_test_nonstream" }
 
 	r := gin.New()
-	NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil).Register(r)
+	handler.Register(r)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{"model":"claude-sonnet-4.6","messages":[{"role":"user","content":"hello"}],"max_tokens":64}`))
@@ -61,9 +62,10 @@ func TestHandlerPostMessages_NonStreaming(t *testing.T) {
 
 func TestHandlerPostMessages_Streaming(t *testing.T) {
 	t.Cleanup(overrideHandlerDeps(t))
-	newMessageID = func() string { return "msg_test_stream" }
-	anthropicPingInterval = 5 * time.Millisecond
-	dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+	handler := NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil)
+	handler.newMessageID = func() string { return "msg_test_stream" }
+	handler.pingInterval = 5 * time.Millisecond
+	handler.dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
 		ch := make(chan kiro.StreamEvent, 8)
 		go func() {
 			defer close(ch)
@@ -80,7 +82,7 @@ func TestHandlerPostMessages_Streaming(t *testing.T) {
 	}
 
 	r := gin.New()
-	NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil).Register(r)
+	handler.Register(r)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{"model":"claude-sonnet-4.6","messages":[{"role":"user","content":"hello"}],"max_tokens":64,"stream":true}`))
@@ -132,13 +134,14 @@ func TestHandlerPostMessages_Streaming(t *testing.T) {
 
 func TestHandlerPostMessages_StreamingDispatcherError(t *testing.T) {
 	t.Cleanup(overrideHandlerDeps(t))
-	newMessageID = func() string { return "msg_test_error" }
-	dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+	handler := NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil)
+	handler.newMessageID = func() string { return "msg_test_error" }
+	handler.dispatcherStream = func(_ *kiro.Dispatcher, _ context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
 		return nil, errs.New(errs.ClassRateLimited, "", "slow down")
 	}
 
 	r := gin.New()
-	NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil).Register(r)
+	handler.Register(r)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{"model":"claude-sonnet-4.6","messages":[{"role":"user","content":"hello"}],"max_tokens":64,"stream":true}`))
@@ -160,10 +163,11 @@ func TestHandlerPostMessages_StreamingDispatcherError(t *testing.T) {
 
 func TestHandlerPostMessages_StreamingClientDisconnect(t *testing.T) {
 	t.Cleanup(overrideHandlerDeps(t))
-	newMessageID = func() string { return "msg_test_disconnect" }
+	handler := NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil)
+	handler.newMessageID = func() string { return "msg_test_disconnect" }
 	started := make(chan struct{})
 	stopped := make(chan struct{})
-	dispatcherStream = func(_ *kiro.Dispatcher, ctx context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
+	handler.dispatcherStream = func(_ *kiro.Dispatcher, ctx context.Context, _ *kiro.KiroPayload, _ account.SelectionHint) (<-chan kiro.StreamEvent, error) {
 		close(started)
 		ch := make(chan kiro.StreamEvent, 1)
 		ch <- kiro.TextDelta{Text: "hello"}
@@ -176,7 +180,7 @@ func TestHandlerPostMessages_StreamingClientDisconnect(t *testing.T) {
 	}
 
 	r := gin.New()
-	NewHandler(&kiro.Dispatcher{}, &kiro.Estimator{}, nil).Register(r)
+	handler.Register(r)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -230,17 +234,8 @@ func TestHandlerPostCountTokens(t *testing.T) {
 
 func overrideHandlerDeps(t *testing.T) func() {
 	t.Helper()
-	oldStream := dispatcherStream
-	oldOnce := dispatcherOnce
-	oldID := newMessageID
-	oldPing := anthropicPingInterval
 	gin.SetMode(gin.TestMode)
-	return func() {
-		dispatcherStream = oldStream
-		dispatcherOnce = oldOnce
-		newMessageID = oldID
-		anthropicPingInterval = oldPing
-	}
+	return func() {}
 }
 
 func eventNames(events []sseEvent) []string {
