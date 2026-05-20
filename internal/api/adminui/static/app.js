@@ -274,6 +274,11 @@ function app() {
       this.quotaLoading = true;
       try {
         this.quotas = await this.apiCall('GET', '/admin/quota') || [];
+        var refreshing = {};
+        for (var i = 0; i < this.quotas.length; i++) {
+          refreshing[this.quotas[i].account_id] = false;
+        }
+        this.quotaRefreshing = refreshing;
       } catch (e) {
         this.toast('Failed to load quota: ' + e.message, 'error');
       } finally {
