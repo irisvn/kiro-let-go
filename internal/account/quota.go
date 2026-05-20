@@ -19,6 +19,11 @@ type Quota struct {
 	SubscriptionTitle string
 	LimitTotal        int64
 	LimitRemaining    int64
+	CurrentUsage      int64
+	OverageCap        int64
+	OverageRate       float64
+	Currency          string
+	ResourceType      string
 	ResetTime         time.Time
 	Raw               json.RawMessage
 	FetchedAt         time.Time
@@ -173,21 +178,86 @@ func parseQuota(body []byte, fetchedAt time.Time) (*Quota, error) {
 
 	q := &Quota{Raw: append(json.RawMessage(nil), body...), FetchedAt: fetchedAt.UTC()}
 	q.SubscriptionTitle, _ = findString(decoded, "subscriptionTitle")
-	count, hasCount := findInt(decoded, "monthlyRequestCount")
-	limit, hasLimit := findInt(decoded, "monthlyRequestLimit")
-	remaining, hasRemaining := findInt(decoded, "monthlyRequestRemaining")
-	if hasLimit {
-		q.LimitTotal = limit
-	}
-	if hasRemaining {
-		q.LimitRemaining = remaining
-	} else if hasLimit && hasCount {
-		q.LimitRemaining = max(limit-count, 0)
-	}
-	if reset, ok := findString(decoded, "resetTime"); ok {
-		q.ResetTime = parseResetTime(reset)
+
+	if breakdown := findUsageBreakdown(decoded); breakdown != nil {
+		if usage, ok := findFloat(breakdown, "currentUsage"); ok {
+			q.CurrentUsage = int64(usage)
+		}
+		if limit, ok := findFloat(breakdown, "usageLimit"); ok {
+			q.LimitTotal = int64(limit)
+			q.LimitRemaining = max(q.LimitTotal-q.CurrentUsage, 0)
+		}
+		if cap, ok := findFloat(breakdown, "overageCap"); ok {
+			q.OverageCap = int64(cap)
+		}
+		if rate, ok := findFloat(breakdown, "overageRate"); ok {
+			q.OverageRate = rate
+		}
+		if currency, ok := findStringDirect(breakdown, "currency"); ok {
+			q.Currency = currency
+		}
+		if resType, ok := findStringDirect(breakdown, "resourceType"); ok {
+			q.ResourceType = resType
+		}
+		if reset, ok := findFloat(breakdown, "nextDateReset"); ok && reset > 0 {
+			q.ResetTime = time.Unix(int64(reset), 0).UTC()
+		}
+	} else {
+		count, hasCount := findInt(decoded, "monthlyRequestCount")
+		limit, hasLimit := findInt(decoded, "monthlyRequestLimit")
+		remaining, hasRemaining := findInt(decoded, "monthlyRequestRemaining")
+		if hasLimit {
+			q.LimitTotal = limit
+		}
+		if hasRemaining {
+			q.LimitRemaining = remaining
+		} else if hasLimit && hasCount {
+			q.CurrentUsage = count
+			q.LimitRemaining = max(limit-count, 0)
+		}
+		if reset, ok := findString(decoded, "resetTime"); ok {
+			q.ResetTime = parseResetTime(reset)
+		}
 	}
 	return q, nil
+}
+
+func findUsageBreakdown(v any) map[string]any {
+	root, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	list, ok := root["usageBreakdownList"]
+	if !ok {
+		return nil
+	}
+	arr, ok := list.([]any)
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	first, ok := arr[0].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return first
+}
+
+func findFloat(m map[string]any, key string) (float64, bool) {
+	raw, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	n, ok := raw.(float64)
+	return n, ok
+}
+
+func findStringDirect(m map[string]any, key string) (string, bool) {
+	raw, ok := m[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := raw.(string)
+	return s, ok
 }
 
 func findString(v any, key string) (string, bool) {

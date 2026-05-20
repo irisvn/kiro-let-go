@@ -275,46 +275,93 @@
             Refresh All
           </button>
         </div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-slate-800 text-slate-400 text-left">
-                <th class="px-4 py-3 font-medium">Account</th>
-                <th class="px-4 py-3 font-medium">Subscription</th>
-                <th class="px-4 py-3 font-medium text-right">Limit Total</th>
-                <th class="px-4 py-3 font-medium text-right">Remaining</th>
-                <th class="px-4 py-3 font-medium">Fetched At</th>
-                <th class="px-4 py-3 font-medium">Stale</th>
-                <th class="px-4 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="q in quotas" :key="q.account_id">
-                <tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                  <td class="px-4 py-3 text-slate-200 font-medium" x-text="q.label"></td>
-                  <td class="px-4 py-3 text-slate-300" x-text="q.subscription_title || '-'"></td>
-                  <td class="px-4 py-3 text-right font-mono text-slate-300" x-text="q.limit_total != null ? q.limit_total.toLocaleString() : '-'"></td>
-                  <td class="px-4 py-3 text-right font-mono" :class="q.limit_remaining != null && q.limit_remaining < 100 ? 'text-amber-400' : 'text-slate-300'" x-text="q.limit_remaining != null ? q.limit_remaining.toLocaleString() : '-'"></td>
-                  <td class="px-4 py-3 text-slate-400 text-xs" x-text="formatTime(q.fetched_at)"></td>
-                  <td class="px-4 py-3">
-                    <span x-show="q.stale" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">Stale</span>
-                    <span x-show="!q.stale" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Fresh</span>
-                  </td>
-                  <td class="px-4 py-3 text-right">
-                    <button @click="refreshQuota(q.account_id)"
-                            :disabled="quotaRefreshing[q.account_id]"
-                            class="text-indigo-400 hover:text-indigo-300 disabled:opacity-50 text-xs font-medium transition-colors">
-                      <span x-show="quotaRefreshing[q.account_id]" class="spinner" style="width:12px;height:12px;border-width:1.5px;"></span>
-                      <span x-text="quotaRefreshing[q.account_id] ? 'Refreshing...' : 'Refresh'"></span>
-                    </button>
-                  </td>
-                </tr>
+
+        <div class="grid gap-4" :class="quotas.length > 1 ? 'md:grid-cols-2' : ''">
+          <template x-for="q in quotas" :key="q.account_id">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h3 class="text-white font-medium text-sm" x-text="q.label"></h3>
+                  <span class="text-xs px-2 py-0.5 rounded-full mt-1 inline-block"
+                        :class="q.subscription_title ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30' : 'bg-slate-700 text-slate-400'"
+                        x-text="q.subscription_title || 'Unknown Plan'"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span x-show="q.stale" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">Stale</span>
+                  <button @click="refreshQuota(q.account_id)"
+                          :disabled="quotaRefreshing[q.account_id]"
+                          class="text-indigo-400 hover:text-indigo-300 disabled:opacity-50 text-xs font-medium transition-colors flex items-center gap-1">
+                    <span x-show="quotaRefreshing[q.account_id]" class="spinner" style="width:12px;height:12px;border-width:1.5px;"></span>
+                    <span x-text="quotaRefreshing[q.account_id] ? '' : 'Refresh'"></span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Credit usage progress bar -->
+              <template x-if="q.limit_total != null && q.limit_total > 0">
+                <div class="mt-3">
+                  <div class="flex items-baseline justify-between mb-1.5">
+                    <span class="text-xs text-slate-400">Credits Used</span>
+                    <span class="text-sm font-mono">
+                      <span class="text-white" x-text="(q.current_usage != null ? q.current_usage : 0).toLocaleString()"></span>
+                      <span class="text-slate-500"> / </span>
+                      <span class="text-slate-300" x-text="q.limit_total.toLocaleString()"></span>
+                    </span>
+                  </div>
+                  <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500"
+                         :class="(() => {
+                           const pct = q.limit_total > 0 ? ((q.current_usage || 0) / q.limit_total) * 100 : 0;
+                           if (pct >= 90) return 'bg-red-500';
+                           if (pct >= 70) return 'bg-amber-500';
+                           return 'bg-emerald-500';
+                         })()"
+                         :style="'width:' + (q.limit_total > 0 ? Math.min(((q.current_usage || 0) / q.limit_total) * 100, 100) : 0) + '%'">
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between mt-1.5">
+                    <span class="text-xs text-slate-500" x-text="(q.limit_total > 0 ? Math.round(((q.current_usage || 0) / q.limit_total) * 100) : 0) + '% used'"></span>
+                    <span class="text-xs font-mono"
+                          :class="q.limit_remaining != null && q.limit_remaining < 100 ? 'text-amber-400' : 'text-emerald-400'"
+                          x-text="(q.limit_remaining != null ? q.limit_remaining.toLocaleString() : '0') + ' remaining'"></span>
+                  </div>
+                </div>
               </template>
-              <tr x-show="quotas.length === 0">
-                <td colspan="7" class="px-4 py-8 text-center text-slate-500">No quota data available</td>
-              </tr>
-            </tbody>
-          </table>
+
+              <!-- Overage info -->
+              <template x-if="q.overage_cap != null && q.overage_cap > 0">
+                <div class="mt-3 pt-3 border-t border-slate-800">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-500">Overage Cap</span>
+                    <span class="text-slate-300 font-mono" x-text="q.overage_cap.toLocaleString() + ' credits'"></span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- No data state -->
+              <template x-if="q.limit_total == null || q.limit_total === 0">
+                <div class="mt-3 text-center py-4">
+                  <p class="text-slate-500 text-xs">No quota data cached</p>
+                  <button @click="refreshQuota(q.account_id)"
+                          :disabled="quotaRefreshing[q.account_id]"
+                          class="mt-2 text-indigo-400 hover:text-indigo-300 text-xs font-medium">
+                    Click Refresh to fetch
+                  </button>
+                </div>
+              </template>
+
+              <!-- Footer: fetched time -->
+              <template x-if="q.fetched_at">
+                <div class="mt-3 pt-2 border-t border-slate-800/50">
+                  <span class="text-xs text-slate-600" x-text="'Fetched: ' + formatTime(q.fetched_at)"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div x-show="quotas.length === 0" class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+          <p class="text-slate-500">No accounts found. Add an account first.</p>
         </div>
       </div>
 

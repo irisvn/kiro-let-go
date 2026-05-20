@@ -47,7 +47,7 @@ func TestQuotaFetcherCacheTTLAndForce(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
 			"subscriptionTitle":"Kiro Pro",
-			"usageBreakdownList":[{"monthlyRequestCount":25,"monthlyRequestLimit":100}],
+			"usageBreakdownList":[{"currentUsage":25,"usageLimit":100,"overageCap":500,"overageRate":0.04,"currency":"USD","resourceType":"CREDIT","nextDateReset":1780272000.0}],
 			"resetTime":"2026-06-01T00:00:00Z"
 		}`))
 	}))

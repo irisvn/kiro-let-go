@@ -106,6 +106,11 @@ type quotaResponse struct {
 	SubscriptionTitle string          `json:"subscription_title"`
 	LimitTotal        int64           `json:"limit_total"`
 	LimitRemaining    int64           `json:"limit_remaining"`
+	CurrentUsage      int64           `json:"current_usage"`
+	OverageCap        int64           `json:"overage_cap"`
+	OverageRate       float64         `json:"overage_rate"`
+	Currency          string          `json:"currency"`
+	ResourceType      string          `json:"resource_type"`
 	ResetTime         *time.Time      `json:"reset_time"`
 	Raw               json.RawMessage `json:"raw"`
 	FetchedAt         *time.Time      `json:"fetched_at"`
@@ -117,6 +122,8 @@ type quotaSummaryResponse struct {
 	SubscriptionTitle *string    `json:"subscription_title"`
 	LimitTotal        *int64     `json:"limit_total"`
 	LimitRemaining    *int64     `json:"limit_remaining"`
+	CurrentUsage      *int64     `json:"current_usage"`
+	OverageCap        *int64     `json:"overage_cap"`
 	FetchedAt         *time.Time `json:"fetched_at"`
 	Stale             bool       `json:"stale"`
 }
@@ -511,6 +518,8 @@ func (h *Handler) getQuotaSummary(c *gin.Context) {
 			entry.SubscriptionTitle = stringPtr(item.Quota.SubscriptionTitle)
 			entry.LimitTotal = int64Ptr(item.Quota.LimitTotal)
 			entry.LimitRemaining = int64Ptr(item.Quota.LimitRemaining)
+			entry.CurrentUsage = int64Ptr(item.Quota.CurrentUsage)
+			entry.OverageCap = int64Ptr(item.Quota.OverageCap)
 			entry.FetchedAt = timePtr(item.Quota.FetchedAt)
 			entry.Stale = h.quotaTTL > 0 && time.Since(item.Quota.FetchedAt.UTC()) > h.quotaTTL
 			if h.quotaTTL <= 0 {
@@ -687,6 +696,11 @@ func toQuotaResponse(quota *account.Quota) quotaResponse {
 		SubscriptionTitle: quota.SubscriptionTitle,
 		LimitTotal:        quota.LimitTotal,
 		LimitRemaining:    quota.LimitRemaining,
+		CurrentUsage:      quota.CurrentUsage,
+		OverageCap:        quota.OverageCap,
+		OverageRate:       quota.OverageRate,
+		Currency:          quota.Currency,
+		ResourceType:      quota.ResourceType,
 		ResetTime:         timePtr(quota.ResetTime),
 		Raw:               append(json.RawMessage(nil), quota.Raw...),
 		FetchedAt:         timePtr(quota.FetchedAt),
