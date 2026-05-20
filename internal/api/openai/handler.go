@@ -16,6 +16,13 @@ import (
 
 const clientClosedRequestStatus = 499
 
+const (
+	requestLogKeyModel        = "rl_model"
+	requestLogKeyInputTokens  = "rl_input_tokens"
+	requestLogKeyOutputTokens = "rl_output_tokens"
+	requestLogKeyStream       = "rl_stream"
+)
+
 type chatDispatcher interface {
 	Stream(context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error)
 	Once(context.Context, *kiro.KiroPayload, account.SelectionHint) (kiro.FullResponse, error)
@@ -47,6 +54,8 @@ func Handler(opts HandlerOptions) gin.HandlerFunc {
 			writeJSONError(c, invalidRequestError(err.Error()))
 			return
 		}
+		c.Set(requestLogKeyModel, req.Model)
+		c.Set(requestLogKeyStream, req.Stream)
 
 		normalizedReq, err := OpenAIToNormalized(&req)
 		if err != nil {
@@ -112,6 +121,8 @@ func handleStream(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletion
 			writer.WriteToolCallStop(e.ID)
 		case kiro.Usage:
 			usage = usageFromKiroPtr(e)
+			c.Set(requestLogKeyInputTokens, e.InputTokens)
+			c.Set(requestLogKeyOutputTokens, e.OutputTokens)
 		case kiro.Stop:
 			writer.WriteFinalChunk(mapFinishReason(e.Reason), usage)
 			writer.WriteDone()
@@ -137,6 +148,8 @@ func handleOnce(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletionRe
 		writeJSONError(c, classifyHandlerError(err))
 		return
 	}
+	c.Set(requestLogKeyInputTokens, full.Usage.InputTokens)
+	c.Set(requestLogKeyOutputTokens, full.Usage.OutputTokens)
 
 	message := ChatMessage{
 		Role:      "assistant",

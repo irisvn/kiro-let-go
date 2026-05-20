@@ -13,18 +13,24 @@ import (
 )
 
 type RequestLogEntry struct {
-	ID           string    `json:"id"`
-	Timestamp    time.Time `json:"timestamp"`
-	Method       string    `json:"method"`
-	Path         string    `json:"path"`
-	Status       int       `json:"status"`
-	DurationMs   int64     `json:"duration_ms"`
-	ClientIP     string    `json:"client_ip"`
-	AccountID    string    `json:"account_id,omitempty"`
-	AccountLabel string    `json:"account_label,omitempty"`
-	Model        string    `json:"model,omitempty"`
-	Error        string    `json:"error,omitempty"`
-	Format       string    `json:"format,omitempty"`
+	ID              string    `json:"id"`
+	Timestamp       time.Time `json:"timestamp"`
+	Method          string    `json:"method"`
+	Path            string    `json:"path"`
+	Status          int       `json:"status"`
+	DurationMs      int64     `json:"duration_ms"`
+	ClientIP        string    `json:"client_ip"`
+	AccountID       string    `json:"account_id,omitempty"`
+	AccountLabel    string    `json:"account_label,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	InputTokens     int       `json:"input_tokens,omitempty"`
+	OutputTokens    int       `json:"output_tokens,omitempty"`
+	Stream          bool      `json:"stream"`
+	RequestBody     string    `json:"request_body,omitempty"`
+	ResponseSnippet string    `json:"response_snippet,omitempty"`
+	Error           string    `json:"error,omitempty"`
+	Format          string    `json:"format,omitempty"`
+	UserAgent       string    `json:"user_agent,omitempty"`
 }
 
 type requestLogReader interface {

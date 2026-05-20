@@ -654,12 +654,12 @@
             </div>
           </div>
           <table class="w-full text-sm">
-            <thead><tr class="border-b border-slate-800 text-slate-400 text-left"><th class="px-4 py-3 font-medium">Time</th><th class="px-4 py-3 font-medium">Method</th><th class="px-4 py-3 font-medium">Path</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium">Dur</th><th class="px-4 py-3 font-medium">Format</th></tr></thead>
+            <thead><tr class="border-b border-slate-800 text-slate-400 text-left"><th class="px-4 py-3 font-medium">Time</th><th class="px-4 py-3 font-medium">Method</th><th class="px-4 py-3 font-medium">Path</th><th class="px-4 py-3 font-medium">Model</th><th class="px-4 py-3 font-medium">Tokens</th><th class="px-4 py-3 font-medium">Status</th><th class="px-4 py-3 font-medium">Duration</th><th class="px-4 py-3 font-medium">Account</th><th class="px-4 py-3 font-medium text-right">Actions</th></tr></thead>
             <tbody>
               <template x-for="entry in proxyLog" :key="entry.id">
-                <tr class="border-b border-slate-800/50 hover:bg-slate-800/30"><td class="px-4 py-3 text-slate-400 font-mono text-xs" x-text="formatShortTime(entry.timestamp)"></td><td class="px-4 py-3 text-emerald-400 font-mono" x-text="entry.method"></td><td class="px-4 py-3 text-slate-200 font-mono" x-text="entry.path"></td><td class="px-4 py-3 font-mono" :class="entry.status >= 400 ? 'text-red-400' : 'text-emerald-400'" x-text="entry.status"></td><td class="px-4 py-3 text-slate-300 font-mono" x-text="formatDuration(entry.duration_ms)"></td><td class="px-4 py-3 text-slate-400" x-text="entry.format || '-'"></td></tr>
+                <tr class="border-b border-slate-800/50 hover:bg-slate-800/30"><td class="px-4 py-3 text-slate-400 font-mono text-xs" x-text="formatShortTime(entry.timestamp)"></td><td class="px-4 py-3 text-emerald-400 font-mono" x-text="entry.method"></td><td class="px-4 py-3 text-slate-200 font-mono text-xs" x-text="entry.path"></td><td class="px-4 py-3 text-slate-200 font-mono text-xs max-w-[14rem] truncate" x-text="entry.model || '-'"></td><td class="px-4 py-3 text-slate-300 font-mono" x-text="formatTokens(entry)"></td><td class="px-4 py-3 font-mono" :class="entry.status >= 400 ? 'text-red-400' : 'text-emerald-400'" x-text="entry.status"></td><td class="px-4 py-3 text-slate-300 font-mono" x-text="formatDuration(entry.duration_ms)"></td><td class="px-4 py-3 text-slate-400 max-w-[10rem] truncate" x-text="formatAccount(entry)"></td><td class="px-4 py-3 text-right"><button @click="openLogDetail(entry)" class="text-indigo-400 hover:text-indigo-300 text-xs font-medium">Detail</button></td></tr>
               </template>
-              <tr x-show="proxyLog.length === 0"><td colspan="6" class="px-4 py-8 text-center text-slate-500">No proxy requests logged</td></tr>
+              <tr x-show="proxyLog.length === 0"><td colspan="9" class="px-4 py-8 text-center text-slate-500">No proxy requests logged</td></tr>
             </tbody>
           </table>
         </div>
@@ -684,6 +684,60 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Request Log Detail Modal -->
+  <div x-show="showLogDetail" x-cloak
+       class="fixed inset-0 z-40 flex items-center justify-center"
+       @keydown.escape.window="closeLogDetail()"
+       @click.self="closeLogDetail()">
+    <div class="fixed inset-0 bg-black/60" @click="closeLogDetail()"></div>
+    <div class="relative bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-3xl mx-4 p-6 z-50 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white">Request Detail</h3>
+        <button @click="closeLogDetail()" class="text-slate-400 hover:text-white text-sm">Close</button>
+      </div>
+      <template x-if="logDetailEntry">
+        <div class="space-y-4">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+            <template x-for="field in [
+              {label:'ID', value:logDetailEntry.id},
+              {label:'Timestamp', value:formatTime(logDetailEntry.timestamp)},
+              {label:'Method', value:logDetailEntry.method},
+              {label:'Path', value:logDetailEntry.path},
+              {label:'Model', value:logDetailEntry.model || '-'},
+              {label:'Format', value:logDetailEntry.format || '-'},
+              {label:'Stream', value:logDetailEntry.stream ? 'true' : 'false'},
+              {label:'Status', value:logDetailEntry.status},
+              {label:'Duration', value:formatDuration(logDetailEntry.duration_ms)},
+              {label:'Client IP', value:logDetailEntry.client_ip || '-'},
+              {label:'Account', value:formatAccount(logDetailEntry)},
+              {label:'Account ID', value:logDetailEntry.account_id || '-'},
+              {label:'Input Tokens', value:logDetailEntry.input_tokens || 0},
+              {label:'Output Tokens', value:logDetailEntry.output_tokens || 0},
+              {label:'User Agent', value:logDetailEntry.user_agent || '-'}
+            ]" :key="field.label">
+              <div>
+                <span class="text-slate-500 text-xs block" x-text="field.label"></span>
+                <span class="text-slate-200 font-mono text-xs break-all" x-text="field.value"></span>
+              </div>
+            </template>
+          </div>
+          <div x-show="logDetailEntry.error">
+            <span class="text-slate-500 text-xs block mb-1">Error</span>
+            <pre class="bg-red-950/30 border border-red-900/50 rounded-lg p-3 text-red-300 text-xs overflow-auto" x-text="logDetailEntry.error"></pre>
+          </div>
+          <div>
+            <span class="text-slate-500 text-xs block mb-1">Request Body (truncated)</span>
+            <pre class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-xs overflow-auto max-h-48" x-text="logDetailEntry.request_body || '-'"></pre>
+          </div>
+          <div>
+            <span class="text-slate-500 text-xs block mb-1">Response Snippet</span>
+            <pre class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-xs overflow-auto max-h-48" x-text="logDetailEntry.response_snippet || '-'"></pre>
+          </div>
+        </div>
+      </template>
+    </div>
   </div>
 
   <!-- Add Account Modal -->

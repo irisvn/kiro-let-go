@@ -11,6 +11,8 @@ function app() {
     health: {},
     proxyConfig: null,
     proxyLog: [],
+    logDetailEntry: null,
+    showLogDetail: false,
     roundRobinResult: null,
     roundRobinLoading: false,
     roundRobinCount: 5,
@@ -420,6 +422,16 @@ function app() {
       this.proxyLog = [];
     },
 
+    openLogDetail(entry) {
+      this.logDetailEntry = entry;
+      this.showLogDetail = true;
+    },
+
+    closeLogDetail() {
+      this.showLogDetail = false;
+      this.logDetailEntry = null;
+    },
+
     async refreshAllQuota() {
       this.quotaLoading = true;
       try {
@@ -497,6 +509,16 @@ function app() {
       if (ms == null) return '-';
       if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
       return ms + 'ms';
+    },
+
+    formatTokens(entry) {
+      if (!entry || (!entry.input_tokens && !entry.output_tokens)) return '-';
+      return (entry.input_tokens || 0) + '/' + (entry.output_tokens || 0);
+    },
+
+    formatAccount(entry) {
+      if (!entry) return '-';
+      return entry.account_label || entry.account_id || '-';
     },
 
     formatShortTime(val) {

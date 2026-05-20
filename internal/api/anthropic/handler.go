@@ -21,6 +21,13 @@ import (
 
 const anthropicPingInterval = 25 * time.Second
 
+const (
+	requestLogKeyModel        = "rl_model"
+	requestLogKeyInputTokens  = "rl_input_tokens"
+	requestLogKeyOutputTokens = "rl_output_tokens"
+	requestLogKeyStream       = "rl_stream"
+)
+
 type dispatcherStreamFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (<-chan kiro.StreamEvent, error)
 type dispatcherOnceFunc func(*kiro.Dispatcher, context.Context, *kiro.KiroPayload, account.SelectionHint) (kiro.FullResponse, error)
 type idFunc func() string
@@ -85,6 +92,8 @@ func (h *Handler) PostMessages(c *gin.Context) {
 		writeJSONError(c, http.StatusBadRequest, errs.New(errs.ClassFatal, "INVALID_REQUEST", err.Error()))
 		return
 	}
+	c.Set(requestLogKeyModel, req.Model)
+	c.Set(requestLogKeyStream, req.Stream)
 
 	normalized, err := anthropicToNormalized(&req)
 	if err != nil {
@@ -102,6 +111,7 @@ func (h *Handler) PostMessages(c *gin.Context) {
 		writeJSONError(c, http.StatusInternalServerError, errs.Wrap(err, errs.ClassFatal, "failed to estimate input tokens"))
 		return
 	}
+	c.Set(requestLogKeyInputTokens, inputTokens)
 
 	hint := account.SelectionHint{ConversationID: payload.ConversationState.ConversationID, Model: req.Model}
 	if req.Stream {
@@ -138,6 +148,7 @@ func (h *Handler) PostCountTokens(c *gin.Context) {
 		writeJSONError(c, http.StatusInternalServerError, errs.Wrap(err, errs.ClassFatal, "failed to estimate input tokens"))
 		return
 	}
+	c.Set(requestLogKeyInputTokens, inputTokens)
 
 	c.JSON(http.StatusOK, CountTokensResponse{InputTokens: inputTokens})
 }
@@ -183,6 +194,10 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 			if !ok {
 				return
 			}
+			if usage, ok := event.(kiro.Usage); ok {
+				c.Set(requestLogKeyInputTokens, usage.InputTokens)
+				c.Set(requestLogKeyOutputTokens, usage.OutputTokens)
+			}
 			markStreamActivity(activity)
 			stop, err := state.handle(event)
 			if err != nil {
@@ -225,6 +240,8 @@ func (h *Handler) once(c *gin.Context, req *MessagesRequest, payload *kiro.KiroP
 			OutputTokens: full.Usage.OutputTokens,
 		},
 	}
+	c.Set(requestLogKeyInputTokens, inputTokens)
+	c.Set(requestLogKeyOutputTokens, full.Usage.OutputTokens)
 	stopReason := normalizeStopReason(full.StopReason, len(full.ToolUses) > 0)
 	resp.StopReason = &stopReason
 	body, err := json.Marshal(resp)
