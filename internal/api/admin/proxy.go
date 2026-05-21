@@ -109,16 +109,32 @@ func (h *Handler) getProxyConfig(c *gin.Context) {
 		}
 	}
 
+	dyn := config.DynamicSettings{}
+	if h.dynamicCfg != nil {
+		dyn = h.dynamicCfg.Get()
+	}
+	if dyn.Strategy == "" {
+		dyn = config.DynamicSettings{
+			Strategy:                 h.cfg.LoadBalancer.Strategy,
+			StickySession:            h.cfg.LoadBalancer.StickySession,
+			MaxAttempts:              h.cfg.Failover.MaxAttempts,
+			BaseCooldownSec:          h.cfg.Failover.BaseCooldownSec,
+			MaxBackoffMultiplier:     h.cfg.Failover.MaxBackoffMultiplier,
+			ProbabilisticRetryChance: h.cfg.Failover.ProbabilisticRetryChance,
+			CacheTTLSeconds:          h.cfg.Quota.CacheTTLSeconds,
+		}
+	}
+
 	c.JSON(http.StatusOK, proxyConfigResponse{
 		Host:                     h.cfg.Server.Host,
 		Port:                     h.cfg.Server.Port,
-		LoadBalancerStrategy:     h.cfg.LoadBalancer.Strategy,
-		StickySession:            h.cfg.LoadBalancer.StickySession,
-		MaxAttempts:              h.cfg.Failover.MaxAttempts,
-		BaseCooldownSec:          h.cfg.Failover.BaseCooldownSec,
-		MaxBackoffMultiplier:     h.cfg.Failover.MaxBackoffMultiplier,
-		ProbabilisticRetryChance: h.cfg.Failover.ProbabilisticRetryChance,
-		QuotaCacheTTLSeconds:     h.cfg.Quota.CacheTTLSeconds,
+		LoadBalancerStrategy:     dyn.Strategy,
+		StickySession:            dyn.StickySession,
+		MaxAttempts:              dyn.MaxAttempts,
+		BaseCooldownSec:          dyn.BaseCooldownSec,
+		MaxBackoffMultiplier:     dyn.MaxBackoffMultiplier,
+		ProbabilisticRetryChance: dyn.ProbabilisticRetryChance,
+		QuotaCacheTTLSeconds:     dyn.CacheTTLSeconds,
 		CredentialsJSONPath:      h.cfg.Storage.CredentialsJSONPath,
 		TotalAccounts:            len(accounts),
 		EnabledAccounts:          enabled,

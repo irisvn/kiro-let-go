@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/irisvn/kiro-let-go/internal/config"
 )
 
 var ErrNoCandidates = fmt.Errorf("no available candidates")
@@ -80,6 +82,14 @@ type MostQuota struct {
 	inFlight sync.Map
 }
 
+// DynamicBalancer reads the configured strategy on each pick.
+type DynamicBalancer struct {
+	dc        *config.DynamicConfig
+	round     *RoundRobin
+	balanced  *Balanced
+	mostQuota *MostQuota
+}
+
 func (m *MostQuota) Pick(ctx context.Context, candidates []*Account) (*Account, error) {
 	if len(candidates) == 0 {
 		return nil, ErrNoCandidates
@@ -126,14 +136,14 @@ func (m *MostQuota) remainingQuota(ctx context.Context, acc *Account) int64 {
 		return quota.LimitRemaining
 	}
 
-	m.triggerRefresh(ctx, acc)
+	m.triggerRefresh(acc)
 	if quota != nil {
 		return quota.LimitRemaining
 	}
 	return 0
 }
 
-func (m *MostQuota) triggerRefresh(ctx context.Context, acc *Account) {
+func (m *MostQuota) triggerRefresh(acc *Account) {
 	if m.fetcher == nil {
 		return
 	}
@@ -171,6 +181,33 @@ func NewBalancer(strategy string, fetcher *Fetcher) (Balancer, error) {
 		return &MostQuota{fetcher: fetcher}, nil
 	default:
 		return nil, fmt.Errorf("unknown balancer strategy: %s", strategy)
+	}
+}
+
+func NewDynamicBalancer(dc *config.DynamicConfig, fetcher *Fetcher) Balancer {
+	return &DynamicBalancer{dc: dc, round: &RoundRobin{}, balanced: &Balanced{}, mostQuota: &MostQuota{fetcher: fetcher}}
+}
+
+func (d *DynamicBalancer) Pick(ctx context.Context, candidates []*Account) (*Account, error) {
+	strategy := "round_robin"
+	if d != nil && d.dc != nil {
+		strategy = d.dc.Get().Strategy
+	}
+	switch strategy {
+	case "balanced":
+		return d.balanced.Pick(ctx, candidates)
+	case "most_quota":
+		return d.mostQuota.Pick(ctx, candidates)
+	case "round_robin", "":
+		return d.round.Pick(ctx, candidates)
+	default:
+		return nil, fmt.Errorf("unknown balancer strategy: %s", strategy)
+	}
+}
+
+func (d *DynamicBalancer) Advance() {
+	if d != nil && d.round != nil {
+		d.round.Advance()
 	}
 }
 

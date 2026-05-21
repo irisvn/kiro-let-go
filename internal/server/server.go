@@ -30,6 +30,7 @@ type Deps struct {
 	QuotaFetcher *account.Fetcher
 	Circuit      *account.CircuitBreaker
 	RequestLog   *RequestLog
+	DynamicCfg   *config.DynamicConfig
 }
 
 type Server struct {
@@ -81,9 +82,10 @@ func New(deps Deps) *Server {
 		deps.Manager,
 		deps.QuotaFetcher,
 		deps.Circuit,
-		time.Duration(deps.Cfg.Quota.CacheTTLSeconds)*time.Second,
+		time.Duration(dynamicQuotaTTL(deps))*time.Second,
 		deps.Dispatcher,
 	)
+	adminHandler.SetDynamicConfig(deps.DynamicCfg)
 	adminHandler.SetProxyDependencies(deps.Cfg, requestLog, deps.Manager)
 	admin.RegisterRoutes(r, deps.Cfg.Server.AdminAPIKey, adminHandler)
 
@@ -99,6 +101,15 @@ func New(deps Deps) *Server {
 		requestLog:   requestLog,
 		boundAddr:    make(chan string, 1),
 	}
+}
+
+func dynamicQuotaTTL(deps Deps) int {
+	if deps.DynamicCfg != nil {
+		if ttl := deps.DynamicCfg.Get().CacheTTLSeconds; ttl > 0 {
+			return ttl
+		}
+	}
+	return deps.Cfg.Quota.CacheTTLSeconds
 }
 
 func (s *Server) Run(ctx context.Context) error {

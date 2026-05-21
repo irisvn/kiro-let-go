@@ -57,6 +57,7 @@ type Handler struct {
 	dispatch   *kiro.Dispatcher
 	quotaTTL   time.Duration
 	cfg        *config.Config
+	dynamicCfg *config.DynamicConfig
 	requestLog requestLogReader
 	acquirer   accountAcquirer
 
@@ -251,6 +252,37 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.GET("/proxy/log", h.getProxyLog)
 	adminGroup.POST("/proxy/test-roundrobin", h.testRoundRobin)
 	adminGroup.POST("/proxy/test-api", h.testProxyAPI)
+	adminGroup.GET("/settings", h.getSettings)
+	adminGroup.PUT("/settings", h.updateSettings)
+}
+
+func (h *Handler) SetDynamicConfig(dc *config.DynamicConfig) {
+	h.dynamicCfg = dc
+}
+
+func (h *Handler) getSettings(c *gin.Context) {
+	if h.dynamicCfg == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "dynamic config is not configured")
+		return
+	}
+	c.JSON(http.StatusOK, h.dynamicCfg.Get())
+}
+
+func (h *Handler) updateSettings(c *gin.Context) {
+	if h.dynamicCfg == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "dynamic config is not configured")
+		return
+	}
+	var req config.DynamicSettings
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if err := h.dynamicCfg.Update(req); err != nil {
+		writeError(c, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, h.dynamicCfg.Get())
 }
 
 func (h *Handler) createAccount(c *gin.Context) {

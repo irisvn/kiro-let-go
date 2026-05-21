@@ -35,6 +35,7 @@ func TestApplyCreatesSchema(t *testing.T) {
 
 	assertTableExists(t, db, "accounts")
 	assertTableExists(t, db, "quota_cache")
+	assertTableExists(t, db, "settings")
 	assertTableExists(t, db, "_migrations")
 	assertIndexExists(t, db, "idx_accounts_enabled")
 	assertIndexExists(t, db, "idx_accounts_auth_method")
@@ -52,7 +53,7 @@ func TestApplyIsIdempotent(t *testing.T) {
 	var count int
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM _migrations").Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 2, count)
 }
 
 func TestApplyRecordsMigration(t *testing.T) {

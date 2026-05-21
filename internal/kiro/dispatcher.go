@@ -16,6 +16,7 @@ import (
 
 	"github.com/irisvn/kiro-let-go/internal/account"
 	"github.com/irisvn/kiro-let-go/internal/antiban"
+	"github.com/irisvn/kiro-let-go/internal/config"
 	"github.com/irisvn/kiro-let-go/internal/errs"
 )
 
@@ -35,9 +36,10 @@ type Dispatcher struct {
 
 // DispatcherConfig configures retry behavior for Dispatcher.
 type DispatcherConfig struct {
-	MaxAttempts int
-	BaseRetryMs int
-	ModelMapper *ModelMapper
+	MaxAttempts   int
+	BaseRetryMs   int
+	ModelMapper   *ModelMapper
+	DynamicConfig *config.DynamicConfig
 }
 
 // FullResponse contains the aggregated result of a non-streaming dispatch.
@@ -74,7 +76,7 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 	if d == nil || d.client == nil || d.manager == nil {
 		return nil, nil, errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")
 	}
-	cfg := normalizeDispatcherConfig(d.cfg)
+	cfg := d.currentConfig()
 	d.applyModelMapping(ctx, payload)
 	hint.Model = payload.ConversationState.CurrentMessage.UserInputMessage.ModelID
 	requestPayload, err := json.Marshal(payload)
@@ -311,7 +313,11 @@ func (d *Dispatcher) applyModelMapping(ctx context.Context, payload *KiroPayload
 	if current == "" {
 		return
 	}
-	if mapper := d.cfg.ModelMapper; mapper != nil {
+	mapper := d.cfg.ModelMapper
+	if d.cfg.DynamicConfig != nil {
+		mapper = NewModelMapper(d.cfg.DynamicConfig.Get().ModelMappings)
+	}
+	if mapper != nil {
 		if provider, ok := any(d.manager).(interface {
 			AvailableModels(context.Context) []string
 		}); ok {
@@ -355,6 +361,17 @@ func (d *Dispatcher) forwardStream(ctx context.Context, acq *account.Acquisition
 		releaseSuccess(acq)
 	}()
 	return out
+}
+
+func (d *Dispatcher) currentConfig() DispatcherConfig {
+	cfg := normalizeDispatcherConfig(d.cfg)
+	if d != nil && d.cfg.DynamicConfig != nil {
+		settings := d.cfg.DynamicConfig.Get()
+		if settings.MaxAttempts > 0 {
+			cfg.MaxAttempts = settings.MaxAttempts
+		}
+	}
+	return cfg
 }
 
 func buildKiroRequest(acc *account.Account, payload []byte, token, region string) (*http.Request, error) {

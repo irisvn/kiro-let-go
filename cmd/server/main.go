@@ -118,6 +118,18 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 		return nil, false, fmt.Errorf("apply migrations: %w", err)
 	}
 
+	dynamicCfg := config.NewDynamicConfig(db)
+	if err := dynamicCfg.Load(); err != nil {
+		_ = db.Close()
+		return nil, false, fmt.Errorf("load dynamic config: %w", err)
+	}
+	if dynamicCfg.IsEmpty() {
+		if err := dynamicCfg.SeedFromStatic(cfg); err != nil {
+			_ = db.Close()
+			return nil, false, fmt.Errorf("seed dynamic config: %w", err)
+		}
+	}
+
 	store, err := account.NewStore(db)
 	if err != nil {
 		_ = db.Close()
@@ -129,6 +141,7 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 		MaxBackoffMultiplier:     cfg.Failover.MaxBackoffMultiplier,
 		ProbabilisticRetryChance: cfg.Failover.ProbabilisticRetryChance,
 	}, nil)
+	circuit.SetDynamicConfig(dynamicCfg)
 	if err := seedCircuitBreaker(ctx, store, circuit); err != nil {
 		_ = store.Close()
 		_ = db.Close()
@@ -139,12 +152,8 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 	apikeyAuth := kiro.NewAPIKeyAuth()
 	client := kiro.NewClient(0, logger)
 	quotaFetcher := account.NewFetcher(&http.Client{Timeout: 30 * time.Second}, store, time.Duration(cfg.Quota.CacheTTLSeconds)*time.Second, logger)
-	balancer, err := account.NewBalancer(cfg.LoadBalancer.Strategy, quotaFetcher)
-	if err != nil {
-		_ = store.Close()
-		_ = db.Close()
-		return nil, false, fmt.Errorf("create account balancer: %w", err)
-	}
+	quotaFetcher.SetDynamicConfig(dynamicCfg)
+	balancer := account.NewDynamicBalancer(dynamicCfg, quotaFetcher)
 
 	manager := account.NewManager(
 		store,
@@ -157,9 +166,10 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 		logger,
 		account.WithSocialAuth(socialAuth),
 		account.WithAPIKeyAuth(apikeyAuth),
+		account.WithDynamicConfig(dynamicCfg),
 	)
-	modelMapper := kiro.NewModelMapper(cfg.ModelMappings)
-	dispatcher := kiro.NewDispatcher(client, manager, kiro.DispatcherConfig{MaxAttempts: cfg.Failover.MaxAttempts, ModelMapper: modelMapper}, logger)
+	modelMapper := kiro.NewModelMapper(dynamicCfg.Get().ModelMappings)
+	dispatcher := kiro.NewDispatcher(client, manager, kiro.DispatcherConfig{MaxAttempts: cfg.Failover.MaxAttempts, ModelMapper: modelMapper, DynamicConfig: dynamicCfg}, logger)
 	srv := server.New(server.Deps{
 		Cfg:          cfg,
 		Logger:       logger,
@@ -168,6 +178,7 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 		Dispatcher:   dispatcher,
 		QuotaFetcher: quotaFetcher,
 		Circuit:      circuit,
+		DynamicCfg:   dynamicCfg,
 	})
 
 	var watcher *account.Watcher

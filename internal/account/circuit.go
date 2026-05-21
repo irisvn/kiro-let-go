@@ -4,6 +4,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/irisvn/kiro-let-go/internal/config"
 )
 
 type clockFn func() time.Time
@@ -33,6 +35,7 @@ type CircuitBreaker struct {
 	mu     sync.RWMutex
 	states map[string]*state
 	cfg    CircuitConfig
+	dc     *config.DynamicConfig
 	clock  clockFn
 }
 
@@ -45,6 +48,12 @@ func NewCircuitBreaker(cfg CircuitConfig, clock clockFn) *CircuitBreaker {
 		cfg:    cfg,
 		clock:  clock,
 	}
+}
+
+func (cb *CircuitBreaker) SetDynamicConfig(dc *config.DynamicConfig) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.dc = dc
 }
 
 func (cb *CircuitBreaker) Seed(accountID string, failureCount int) {
@@ -152,18 +161,39 @@ func (cb *CircuitBreaker) calculateCooldown(failures int) time.Duration {
 	if failures < 3 {
 		return 0
 	}
+	cfg := cb.config()
 	multiplier := 1 << (failures - 3)
-	multiplier = min(multiplier, cb.cfg.MaxBackoffMultiplier)
-	return cb.cfg.BaseCooldown * time.Duration(multiplier)
+	multiplier = min(multiplier, cfg.MaxBackoffMultiplier)
+	return cfg.BaseCooldown * time.Duration(multiplier)
 }
 
 // ShouldRetry reports whether a circuit-open account should be retried.
 func (cb *CircuitBreaker) ShouldRetry() bool {
-	if cb.cfg.ProbabilisticRetryChance <= 0 {
+	cfg := cb.config()
+	if cfg.ProbabilisticRetryChance <= 0 {
 		return false
 	}
-	if cb.cfg.ProbabilisticRetryChance >= 1 {
+	if cfg.ProbabilisticRetryChance >= 1 {
 		return true
 	}
-	return rand.Float64() < cb.cfg.ProbabilisticRetryChance
+	return rand.Float64() < cfg.ProbabilisticRetryChance
+}
+
+func (cb *CircuitBreaker) config() CircuitConfig {
+	cb.mu.RLock()
+	dc := cb.dc
+	cfg := cb.cfg
+	cb.mu.RUnlock()
+	if dc == nil {
+		return cfg
+	}
+	settings := dc.Get()
+	if settings.BaseCooldownSec > 0 {
+		cfg.BaseCooldown = time.Duration(settings.BaseCooldownSec) * time.Second
+	}
+	if settings.MaxBackoffMultiplier > 0 {
+		cfg.MaxBackoffMultiplier = settings.MaxBackoffMultiplier
+	}
+	cfg.ProbabilisticRetryChance = settings.ProbabilisticRetryChance
+	return cfg
 }

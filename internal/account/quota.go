@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irisvn/kiro-let-go/internal/config"
 	"github.com/irisvn/kiro-let-go/internal/errs"
 )
 
@@ -34,6 +35,7 @@ type Fetcher struct {
 	httpClient *http.Client
 	store      *Store
 	ttl        time.Duration
+	dc         *config.DynamicConfig
 	logger     *slog.Logger
 }
 
@@ -43,6 +45,12 @@ type QuotaSummaryItem struct {
 	Label     string
 	Enabled   bool
 	Quota     *Quota
+}
+
+func (f *Fetcher) SetDynamicConfig(dc *config.DynamicConfig) {
+	if f != nil {
+		f.dc = dc
+	}
 }
 
 // NewFetcher creates a quota fetcher. It does not start background work.
@@ -118,10 +126,16 @@ func (f *Fetcher) cached(ctx context.Context, accountID string) (*Quota, error) 
 }
 
 func (f *Fetcher) isFresh(quota *Quota) bool {
-	if quota == nil || f.ttl <= 0 {
+	ttl := f.ttl
+	if f.dc != nil {
+		if seconds := f.dc.Get().CacheTTLSeconds; seconds > 0 {
+			ttl = time.Duration(seconds) * time.Second
+		}
+	}
+	if quota == nil || ttl <= 0 {
 		return false
 	}
-	return time.Since(quota.FetchedAt) < f.ttl
+	return time.Since(quota.FetchedAt) < ttl
 }
 
 func (f *Fetcher) fetch(ctx context.Context, acc *Account) (*Quota, error) {
@@ -146,10 +160,10 @@ func (f *Fetcher) fetch(ctx context.Context, acc *Account) (*Quota, error) {
 		token = *acc.APIKey
 	}
 	req.Header = http.Header{
-		"Authorization":              {"Bearer " + token},
-		"Content-Type":               {"application/json"},
-		"Connection":                 {"close"},
-		"x-amzn-kiro-agent-mode":     {"vibe"},
+		"Authorization":               {"Bearer " + token},
+		"Content-Type":                {"application/json"},
+		"Connection":                  {"close"},
+		"x-amzn-kiro-agent-mode":      {"vibe"},
 		"x-amzn-codewhisperer-optout": {"true"},
 	}
 

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/irisvn/kiro-let-go/internal/config"
 	"github.com/irisvn/kiro-let-go/internal/errs"
 )
 
@@ -58,6 +59,7 @@ type Manager struct {
 	mu         sync.RWMutex
 	tokenLocks sync.Map /* accountID → *sync.Mutex */
 	cfg        ManagerConfig
+	dc         *config.DynamicConfig
 	logger     *slog.Logger
 
 	socialAuth       SocialRefresher
@@ -91,6 +93,10 @@ func WithSocialAuth(auth SocialRefresher) ManagerOption {
 // WithAPIKeyAuth configures the API-key refresher used by a Manager.
 func WithAPIKeyAuth(auth APIKeyRefresher) ManagerOption {
 	return func(m *Manager) { m.apiKeyAuth = auth }
+}
+
+func WithDynamicConfig(dc *config.DynamicConfig) ManagerOption {
+	return func(m *Manager) { m.dc = dc }
 }
 
 // Acquire selects and prepares an account for a request.
@@ -221,7 +227,7 @@ func (m *Manager) filterCandidates(ctx context.Context, accounts []Account, hint
 }
 
 func (m *Manager) stickyCandidate(candidates []*Account, hint SelectionHint) *Account {
-	if !m.cfg.StickySession || len(hint.ExcludeIDs) > 0 {
+	if !m.stickySessionEnabled() || len(hint.ExcludeIDs) > 0 {
 		return nil
 	}
 	m.mu.RLock()
@@ -263,7 +269,7 @@ func (m *Manager) acquireAccount(ctx context.Context, acc *Account) (*Acquisitio
 			if advancer, ok := m.balancer.(interface{ Advance() }); ok {
 				advancer.Advance()
 			}
-			if m.cfg.StickySession {
+			if m.stickySessionEnabled() {
 				m.mu.Lock()
 				m.lastSuccessfulID = id
 				m.mu.Unlock()
@@ -276,6 +282,13 @@ func (m *Manager) acquireAccount(ctx context.Context, acc *Account) (*Acquisitio
 			m.circuit.RecordFailure(id, reason)
 		},
 	}, nil
+}
+
+func (m *Manager) stickySessionEnabled() bool {
+	if m != nil && m.dc != nil {
+		return m.dc.Get().StickySession
+	}
+	return m != nil && m.cfg.StickySession
 }
 
 func (m *Manager) refreshLocked(ctx context.Context, acc *Account, force bool) (*Account, string, error) {
