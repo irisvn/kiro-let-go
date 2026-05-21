@@ -168,3 +168,56 @@ build:
 	go build -ldflags "..." -o bin/kiro-let-go ./cmd/server
 	go build -ldflags "..." -o bin/kiro-let-go-cli ./cmd/cli
 ```
+
+## Admin UI
+
+Giao diện quản trị được xây dựng bằng React 19 + Vite + TypeScript + Zustand + shadcn/ui.
+
+- Build: `cd web && npm ci && npm run build`
+- Output được embed vào binary qua `embed.FS`
+- Served tại `/admin/ui/`
+
+Admin UI cung cấp các tab: Accounts (CRUD + test connection), Models (xem và map models), Settings (edit dynamic config trực tiếp), Proxy Log (request history), và Test API (end-to-end proxy test).
+
+## Dynamic Config Layer
+
+Cấu hình động được lưu trong bảng `settings` của SQLite. Static config (JSON file) dùng cho bootstrap, dynamic config (DB) dùng cho runtime.
+
+- Hot-reload qua `DynamicConfig.Get()` mỗi request
+- `RWMutex` bảo vệ, chi phí đọc rất thấp
+- Các components đọc config mới nhất mà không cần restart
+
+## Token Auto-Refresh
+
+Background goroutine chạy với interval 5 phút. Tự động refresh social tokens 10 phút trước khi hết hạn. Nếu token hết hạn và refresh thất bại, account sẽ bị auto-disable.
+
+## Reliability Pipeline
+
+Trước khi gửi request tới Kiro, dispatcher chạy pipeline sau:
+
+1. **Schema Normalization** — Chuẩn hóa request về định dạng internal
+2. **Tool Name Shortening** — Rút gọn tên tool nếu vượt quá giới hạn
+3. **Payload Size Guard** — Tự động trim nếu payload vượt quá 600KB
+
+## Circuit Breaker
+
+Ngưỡng: 3 failures. Khi một account đạt ngưỡng, circuit breaker mở và account bị loại khỏi rotation. Auto-recovery khi tất cả accounts đều bị block (thử lại với xác suất `probabilistic_retry_chance`).
+
+## Model Resolution
+
+Luồng resolve model từ input tới upstream:
+
+```
+normalizeModelInput()
+  |
+  v
+MapModel()
+  |
+  v
+ModelMapper.Resolve() (DB rules)
+  |
+  v
+fallback chains
+```
+
+`normalizeModelInput()` chuẩn hóa tên model từ client. `MapModel()` áp dụng mapping rules từ dynamic config. `ModelMapper.Resolve()` tra cứu DB để tìm target model. Nếu không match rule nào, dùng fallback chains.

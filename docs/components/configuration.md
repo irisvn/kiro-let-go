@@ -122,3 +122,34 @@ File credentials mẫu dùng cho watcher: [configs/credentials.example.json](../
   {"label":"apikey-acct","auth_method":"apikey","api_key":"ksk_xxxxxxxxxxxxxxxxxxxxxx","enabled":true}
 ]
 ```
+
+## Dynamic Config (DB-backed, hot-reload)
+
+Cấu hình động được lưu trong bảng `settings` trong SQLite dưới dạng key-value.
+
+- Seed từ JSON file lần đầu, sau đó DB là source of truth
+- Các fields: `strategy`, `sticky_session`, `base_cooldown_sec`, `max_backoff_multiplier`, `probabilistic_retry_chance`, `max_attempts`, `cache_ttl_seconds`, `model_mappings`
+- API: `GET /admin/settings`, `PUT /admin/settings`
+- Hot-reload: components đọc `DynamicConfig.Get()` mỗi request (`RWMutex`, chi phí rất thấp)
+- Admin UI: tab Settings cho phép edit trực tiếp
+
+## Model Mappings config format
+
+```json
+{
+  "id": "gpt4-to-sonnet",
+  "name": "GPT-4 → Sonnet",
+  "enabled": true,
+  "rule_type": "replace",
+  "source_model": "gpt-4",
+  "target_models": ["claude-sonnet-4.6"],
+  "weights": []
+}
+```
+
+Các rule types:
+
+- `replace` — 1:1 mapping, thay thế source model bằng target model
+- `alias` — Giữ nguyên, source và target là cùng một model
+- `loadbalance` — Weighted round-robin phân phối request giữa nhiều target models
+```

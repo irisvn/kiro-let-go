@@ -168,3 +168,59 @@ curl http://localhost:8765/admin/quota \
 ```
 
 Luu y: endpoint `/admin/quota` khong tu dong refresh quota tu upstream. No chi tra du lieu tu cache hoac DB. Day la tinh nang "probe avoidance" — tranh goi len Kiro khong can thiet.
+
+## New endpoints
+
+### POST /admin/accounts/:id/test
+
+- Mô tả: Test connection tới Kiro (dùng getUsageLimits, không tốn quota)
+- Response: `{status: "valid"|"banned"|"suspended"|"token_expired"|"error", message, subscription_title, user_id, duration_ms}`
+
+### POST /admin/accounts/:id/chat-test
+
+- Mô tả: Gửi message thật qua account cụ thể (dùng generateAssistantResponse)
+- Body: `{model: "claude-haiku-4.5", message: "Hi"}`
+- Response: `{success, model, message, response, duration_ms, error}`
+
+### GET /admin/accounts/:id/models
+
+- Mô tả: Lấy danh sách models từ Kiro ListAvailableModels API (cache 30 phút)
+- Response: `{models: [{model_id, model_name, description, rate_multiplier, ...}], default_model, cached}`
+
+### POST /admin/accounts/:id/reset-circuit
+
+- Mô tả: Reset circuit breaker cho account (clear failures, re-enable)
+- Response: updated account + circuit state
+
+### GET /admin/models
+
+- Mô tả: Aggregated model list từ first enabled account
+- Response: `{models: [...]}`
+
+### GET /admin/settings
+
+- Mô tả: Dynamic config hiện tại (load_balancer, failover, quota, model_mappings)
+- Response: DynamicSettings object
+
+### PUT /admin/settings
+
+- Mô tả: Update dynamic config (hot-reload, không cần restart)
+- Body: DynamicSettings object
+- Response: updated settings
+
+### GET /admin/proxy/config
+
+- Mô tả: Proxy configuration + account counts + endpoint list
+- Response: `{host, port, strategy, sticky_session, max_attempts, ..., endpoints: [...]}`
+
+### GET /admin/proxy/log
+
+- Mô tả: Request log (newest first, max 100 entries)
+- Query: `?limit=50`
+- Response: `[{id, timestamp, method, path, model, input_tokens, output_tokens, status, duration_ms, account_id, account_label, ...}]`
+
+### POST /admin/proxy/test-api
+
+- Mô tả: Test proxy flow end-to-end (qua load balancer + failover)
+- Body: `{format: "anthropic"|"openai", model: "claude-haiku-4.5", message: "Hi"}`
+- Response: `{success, format, model, response, duration_ms, input_tokens, output_tokens, account_label, error}`
