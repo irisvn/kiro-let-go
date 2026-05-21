@@ -254,6 +254,7 @@ func RegisterRoutes(r gin.IRouter, adminAPIKey string, h *Handler) {
 	adminGroup.POST("/proxy/test-api", h.testProxyAPI)
 	adminGroup.GET("/settings", h.getSettings)
 	adminGroup.PUT("/settings", h.updateSettings)
+	adminGroup.GET("/models", h.listAllModels)
 }
 
 func (h *Handler) SetDynamicConfig(dc *config.DynamicConfig) {
@@ -283,6 +284,53 @@ func (h *Handler) updateSettings(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, h.dynamicCfg.Get())
+}
+
+func (h *Handler) listAllModels(c *gin.Context) {
+	if h.store == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", "account store is not configured")
+		return
+	}
+
+	accounts, err := h.store.List(c.Request.Context(), account.ListFilter{EnabledOnly: true})
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "internal_error", fmt.Sprintf("list accounts: %v", err))
+		return
+	}
+	if len(accounts) == 0 {
+		c.JSON(http.StatusOK, ListModelsResponse{Models: []AvailableModel{}})
+		return
+	}
+
+	var lastErr error
+	for i := range accounts {
+		acc := &accounts[i]
+
+		if cached, ok := h.getCachedModels(acc.ID); ok {
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+
+		acc, ok := h.ensureFreshToken(c, acc)
+		if !ok {
+			continue
+		}
+
+		models, _, _, err := h.fetchAccountModels(c.Request.Context(), acc)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		h.setCachedModels(acc.ID, *models)
+		c.JSON(http.StatusOK, models)
+		return
+	}
+
+	if lastErr != nil {
+		writeError(c, http.StatusBadGateway, "upstream_error", fmt.Sprintf("fetch models from all accounts failed: %v", lastErr))
+		return
+	}
+	c.JSON(http.StatusOK, ListModelsResponse{Models: []AvailableModel{}})
 }
 
 func (h *Handler) createAccount(c *gin.Context) {
