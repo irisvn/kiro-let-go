@@ -7,14 +7,14 @@
     "currentMessage": {
       "userInputMessage": {
         "content": "Tell me a joke",
-        "modelId": "claude-sonnet-4.6",
+          "modelId": "sonnet",
         "origin": "AI_EDITOR"
       }
     },
     "history": [
       {
         "content": "Hi",
-        "modelId": "claude-sonnet-4.6",
+            "modelId": "sonnet",
         "origin": "AI_EDITOR"
       },
       {

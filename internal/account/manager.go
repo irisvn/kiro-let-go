@@ -165,6 +165,36 @@ func (m *Manager) List(ctx context.Context) ([]*Account, error) {
 	return out, nil
 }
 
+// AvailableModels returns models usable by at least one currently enabled account.
+func (m *Manager) AvailableModels(ctx context.Context) []string {
+	if m == nil || m.store == nil {
+		return nil
+	}
+	accounts, err := m.store.List(ctx, ListFilter{EnabledOnly: true})
+	if err != nil || len(accounts) == 0 {
+		return nil
+	}
+	models := map[string]struct{}{
+		"claude-sonnet-4.5": {},
+		"claude-sonnet-4.6": {},
+		"claude-haiku-4.5":  {},
+	}
+	for i := range accounts {
+		acc := &accounts[i]
+		if !m.hasFreeSubscription(ctx, acc.ID) {
+			models["claude-opus-4.5"] = struct{}{}
+			models["claude-opus-4.6"] = struct{}{}
+			models["claude-opus-4.7"] = struct{}{}
+			break
+		}
+	}
+	out := make([]string, 0, len(models))
+	for model := range models {
+		out = append(out, model)
+	}
+	return out
+}
+
 func (m *Manager) filterCandidates(ctx context.Context, accounts []Account, hint SelectionHint) []*Account {
 	excluded := make(map[string]struct{}, len(hint.ExcludeIDs))
 	for _, id := range hint.ExcludeIDs {

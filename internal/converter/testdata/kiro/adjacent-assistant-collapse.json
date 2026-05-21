@@ -7,7 +7,7 @@
     "currentMessage": {
       "userInputMessage": {
         "content": "continue",
-        "modelId": "claude-haiku-4.5",
+          "modelId": "haiku",
         "origin": "AI_EDITOR"
       }
     },

@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/irisvn/kiro-let-go/internal/account"
+	"github.com/irisvn/kiro-let-go/internal/converter"
 	"github.com/irisvn/kiro-let-go/internal/errs"
 	"github.com/irisvn/kiro-let-go/internal/kiro"
-	"github.com/irisvn/kiro-let-go/internal/normalized"
 )
 
 const clientClosedRequestStatus = 499
@@ -68,7 +68,7 @@ func Handler(opts HandlerOptions) gin.HandlerFunc {
 			return
 		}
 
-		payload, err := normalized.NormalizedToKiro(normalizedReq, "")
+		payload, err := converter.NormalizedToKiro(normalizedReq, "")
 		if err != nil {
 			writeJSONError(c, requestError(err))
 			return
@@ -225,7 +225,7 @@ func setStreamingHeaders(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func wantsReasoning(req *ChatCompletionRequest, normalizedReq *normalized.NormalizedRequest) bool {
+func wantsReasoning(req *ChatCompletionRequest, normalizedReq *converter.NormalizedRequest) bool {
 	if req != nil && req.ReasoningEffort != "" {
 		return true
 	}

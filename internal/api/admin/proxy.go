@@ -11,7 +11,6 @@ import (
 	"github.com/irisvn/kiro-let-go/internal/account"
 	"github.com/irisvn/kiro-let-go/internal/config"
 	"github.com/irisvn/kiro-let-go/internal/converter"
-	"github.com/irisvn/kiro-let-go/internal/kiro"
 )
 
 type RequestLogEntry struct {
@@ -200,8 +199,6 @@ func (h *Handler) testProxyAPI(c *gin.Context) {
 	if model == "" {
 		model = "claude-haiku-4.5"
 	}
-	model = kiro.MapModel(model)
-
 	message := strings.TrimSpace(req.Message)
 	if message == "" {
 		message = "Hi"

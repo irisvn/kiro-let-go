@@ -18,17 +18,16 @@ func NormalizedToKiro(req *NormalizedRequest, profileArn string) (*kiro.KiroPayl
 		return nil, fmt.Errorf("normalized request is nil")
 	}
 
-	mappedModel := kiro.MapModel(req.Model)
 	lastUser := lastUserMessageIndex(req.Messages)
 	if lastUser == -1 {
 		return nil, fmt.Errorf("normalized request has no user message")
 	}
 
-	history, err := buildKiroHistory(req.Messages[:lastUser], mappedModel)
+	history, err := buildKiroHistory(req.Messages[:lastUser], req.Model)
 	if err != nil {
 		return nil, err
 	}
-	current, err := buildCurrentKiroMessage(req, req.Messages[lastUser], mappedModel)
+	current, err := buildCurrentKiroMessage(req, req.Messages[lastUser], req.Model)
 	if err != nil {
 		return nil, err
 	}

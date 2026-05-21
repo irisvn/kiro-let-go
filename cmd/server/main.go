@@ -35,11 +35,12 @@ const (
 var errUncleanShutdown = errors.New("unclean shutdown")
 
 type application struct {
-	logger  *slog.Logger
-	server  *server.Server
-	watcher *account.Watcher
-	store   *account.Store
-	db      *sql.DB
+	logger         *slog.Logger
+	server         *server.Server
+	watcher        *account.Watcher
+	tokenRefresher *account.TokenRefresher
+	store          *account.Store
+	db             *sql.DB
 }
 
 func main() {
@@ -157,7 +158,8 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 		account.WithSocialAuth(socialAuth),
 		account.WithAPIKeyAuth(apikeyAuth),
 	)
-	dispatcher := kiro.NewDispatcher(client, manager, kiro.DispatcherConfig{MaxAttempts: cfg.Failover.MaxAttempts}, logger)
+	modelMapper := kiro.NewModelMapper(cfg.ModelMappings)
+	dispatcher := kiro.NewDispatcher(client, manager, kiro.DispatcherConfig{MaxAttempts: cfg.Failover.MaxAttempts, ModelMapper: modelMapper}, logger)
 	srv := server.New(server.Deps{
 		Cfg:          cfg,
 		Logger:       logger,
@@ -173,7 +175,8 @@ func buildApplication(ctx context.Context, args []string, stderr io.Writer) (*ap
 		watcher = account.NewWatcher(cfg.Storage.CredentialsJSONPath, store, logger)
 	}
 
-	return &application{logger: logger, server: srv, watcher: watcher, store: store, db: db}, false, nil
+	tokenRefresher := account.NewTokenRefresher(store, socialAuth, logger)
+	return &application{logger: logger, server: srv, watcher: watcher, tokenRefresher: tokenRefresher, store: store, db: db}, false, nil
 }
 
 func runApplication(ctx context.Context, app *application, sigCh <-chan os.Signal) error {
@@ -202,6 +205,12 @@ func runApplication(ctx context.Context, app *application, sigCh <-chan os.Signa
 			}
 			app.logger.Warn("credentials watcher exited with error", "error", err)
 			return fmt.Errorf("run credentials watcher: %w", err)
+		})
+	}
+
+	if app.tokenRefresher != nil {
+		group.Go(func() error {
+			return app.tokenRefresher.Run(groupCtx)
 		})
 	}
 

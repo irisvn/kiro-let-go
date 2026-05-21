@@ -55,15 +55,27 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"`
 }
 
+// ModelMappingRule maps incoming model names to one or more Kiro model names.
+type ModelMappingRule struct {
+	ID           string   `mapstructure:"id" json:"id"`
+	Name         string   `mapstructure:"name" json:"name"`
+	Enabled      bool     `mapstructure:"enabled" json:"enabled"`
+	RuleType     string   `mapstructure:"rule_type" json:"rule_type"`
+	SourceModel  string   `mapstructure:"source_model" json:"source_model"`
+	TargetModels []string `mapstructure:"target_models" json:"target_models"`
+	Weights      []int    `mapstructure:"weights" json:"weights"`
+}
+
 // Config is the top-level application configuration.
 type Config struct {
-	Server       ServerConfig       `mapstructure:"server"`
-	Kiro         KiroConfig         `mapstructure:"kiro"`
-	Storage      StorageConfig      `mapstructure:"storage"`
-	LoadBalancer LoadBalancerConfig `mapstructure:"load_balancer"`
-	Quota        QuotaConfig        `mapstructure:"quota"`
-	Failover     FailoverConfig     `mapstructure:"failover"`
-	Logging      LoggingConfig      `mapstructure:"logging"`
+	Server        ServerConfig       `mapstructure:"server"`
+	Kiro          KiroConfig         `mapstructure:"kiro"`
+	Storage       StorageConfig      `mapstructure:"storage"`
+	LoadBalancer  LoadBalancerConfig `mapstructure:"load_balancer"`
+	Quota         QuotaConfig        `mapstructure:"quota"`
+	Failover      FailoverConfig     `mapstructure:"failover"`
+	Logging       LoggingConfig      `mapstructure:"logging"`
+	ModelMappings []ModelMappingRule `mapstructure:"model_mappings" json:"model_mappings"`
 }
 
 // setDefaults configures viper with the built-in default values.

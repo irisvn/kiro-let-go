@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/irisvn/kiro-let-go/internal/converter"
 	"github.com/irisvn/kiro-let-go/internal/errs"
-	"github.com/irisvn/kiro-let-go/internal/normalized"
 )
 
-func OpenAIToNormalized(req *ChatCompletionRequest) (*normalized.NormalizedRequest, error) {
+func OpenAIToNormalized(req *ChatCompletionRequest) (*converter.NormalizedRequest, error) {
 	if req == nil {
 		return nil, errs.New(errs.ClassFatal, "INVALID_REQUEST", "openai request is nil")
 	}
 
-	out := &normalized.NormalizedRequest{
+	out := &converter.NormalizedRequest{
 		Model:           req.Model,
 		MaxOutputTokens: req.MaxTokens,
 		Temperature:     req.Temperature,
@@ -25,7 +25,7 @@ func OpenAIToNormalized(req *ChatCompletionRequest) (*normalized.NormalizedReque
 	}
 
 	if req.ToolChoice != "" {
-		out.ToolChoice = normalized.NormalizedToolChoice{Mode: req.ToolChoice}
+		out.ToolChoice = converter.NormalizedToolChoice{Mode: req.ToolChoice}
 	}
 
 	for _, tool := range req.Tools {
@@ -35,7 +35,7 @@ func OpenAIToNormalized(req *ChatCompletionRequest) (*normalized.NormalizedReque
 		if len(tool.Function.Parameters) > 0 && !json.Valid(tool.Function.Parameters) {
 			return nil, errs.New(errs.ClassFatal, "INVALID_TOOL_SCHEMA", "tool parameters must be valid JSON")
 		}
-		out.Tools = append(out.Tools, normalized.NormalizedTool{
+		out.Tools = append(out.Tools, converter.NormalizedTool{
 			Name:        tool.Function.Name,
 			Description: tool.Function.Description,
 			SchemaJSON:  string(tool.Function.Parameters),
@@ -50,26 +50,26 @@ func OpenAIToNormalized(req *ChatCompletionRequest) (*normalized.NormalizedReque
 		}
 		if msg.Role == "system" {
 			for _, part := range parts {
-				if text, ok := part.(normalized.Text); ok {
+				if text, ok := part.(converter.Text); ok {
 					systems = append(systems, text.Text)
 				}
 			}
 			continue
 		}
-		appendNormalizedMessage(out, normalized.NormalizedMessage{Role: msg.Role, Parts: parts})
+		appendNormalizedMessage(out, converter.NormalizedMessage{Role: msg.Role, Parts: parts})
 	}
 
 	out.SystemPrompt = strings.Join(systems, "\n")
 	return out, nil
 }
 
-func openAIMessageParts(msg ChatMessage) ([]normalized.NormalizedPart, error) {
-	var parts []normalized.NormalizedPart
+func openAIMessageParts(msg ChatMessage) ([]converter.NormalizedPart, error) {
+	var parts []converter.NormalizedPart
 	if msg.Content.Parts != nil {
 		for _, part := range msg.Content.Parts {
 			switch part.Type {
 			case "text":
-				parts = append(parts, normalized.Text{Text: part.Text})
+				parts = append(parts, converter.Text{Text: part.Text})
 			case "image_url":
 				image, err := openAIImagePart(part)
 				if err != nil {
@@ -80,46 +80,46 @@ func openAIMessageParts(msg ChatMessage) ([]normalized.NormalizedPart, error) {
 		}
 	} else if msg.Content.Text != "" || msg.Role == "tool" {
 		if msg.Role == "tool" {
-			parts = append(parts, normalized.ToolResult{ToolUseID: msg.ToolCallID, ContentText: msg.Content.Text})
+			parts = append(parts, converter.ToolResult{ToolUseID: msg.ToolCallID, ContentText: msg.Content.Text})
 		} else {
-			parts = append(parts, normalized.Text{Text: msg.Content.Text})
+			parts = append(parts, converter.Text{Text: msg.Content.Text})
 		}
 	}
 
 	if msg.Role == "assistant" {
 		for _, call := range msg.ToolCalls {
-			parts = append(parts, normalized.ToolUse{ID: call.ID, Name: call.Function.Name, InputJSON: call.Function.Arguments})
+			parts = append(parts, converter.ToolUse{ID: call.ID, Name: call.Function.Name, InputJSON: call.Function.Arguments})
 		}
 	}
 
 	return parts, nil
 }
 
-func openAIImagePart(part ContentPart) (normalized.Image, error) {
+func openAIImagePart(part ContentPart) (converter.Image, error) {
 	if part.ImageURL == nil {
-		return normalized.Image{}, nil
+		return converter.Image{}, nil
 	}
 	url := part.ImageURL.URL
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-		return normalized.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "http image URLs are unsupported")
+		return converter.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "http image URLs are unsupported")
 	}
 	const prefix = "data:"
 	if !strings.HasPrefix(url, prefix) {
-		return normalized.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "image URL must be a data URL")
+		return converter.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "image URL must be a data URL")
 	}
 	metaAndData := strings.TrimPrefix(url, prefix)
 	meta, data, ok := strings.Cut(metaAndData, ",")
 	if !ok {
-		return normalized.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "malformed data URL")
+		return converter.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "malformed data URL")
 	}
 	mediaType := strings.TrimSuffix(meta, ";base64")
 	if mediaType == meta || mediaType == "" {
-		return normalized.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "image data URL must be base64 encoded")
+		return converter.Image{}, errs.New(errs.ClassFatal, "IMAGE_URL_UNSUPPORTED", "image data URL must be base64 encoded")
 	}
-	return normalized.Image{MediaType: mediaType, DataB64: data}, nil
+	return converter.Image{MediaType: mediaType, DataB64: data}, nil
 }
 
-func appendNormalizedMessage(req *normalized.NormalizedRequest, msg normalized.NormalizedMessage) {
+func appendNormalizedMessage(req *converter.NormalizedRequest, msg converter.NormalizedMessage) {
 	if len(req.Messages) > 0 && req.Messages[len(req.Messages)-1].Role == msg.Role {
 		req.Messages[len(req.Messages)-1].Parts = append(req.Messages[len(req.Messages)-1].Parts, msg.Parts...)
 		return

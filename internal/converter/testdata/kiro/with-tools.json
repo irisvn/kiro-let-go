@@ -7,7 +7,7 @@
     "currentMessage": {
       "userInputMessage": {
         "content": "Thanks",
-        "modelId": "claude-opus-4.7",
+          "modelId": "opus-4.7",
         "origin": "AI_EDITOR",
         "userInputMessageContext": {
           "tools": [
@@ -35,7 +35,7 @@
     "history": [
       {
         "content": "Weather?",
-        "modelId": "claude-opus-4.7",
+            "modelId": "opus-4.7",
         "origin": "AI_EDITOR"
       },
       {

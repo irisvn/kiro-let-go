@@ -678,17 +678,16 @@ func normalizedToKiro(req *handlerNormalizedRequest, profileArn string) (*kiro.K
 		return nil, fmt.Errorf("normalized request is nil")
 	}
 
-	mappedModel := kiro.MapModel(req.Model)
 	lastUser := handlerLastUserMessageIndex(req.Messages)
 	if lastUser == -1 {
 		return nil, fmt.Errorf("normalized request has no user message")
 	}
 
-	history, err := handlerBuildKiroHistory(req.Messages[:lastUser], mappedModel)
+	history, err := handlerBuildKiroHistory(req.Messages[:lastUser], req.Model)
 	if err != nil {
 		return nil, err
 	}
-	current, err := handlerBuildCurrentKiroMessage(req, req.Messages[lastUser], mappedModel)
+	current, err := handlerBuildCurrentKiroMessage(req, req.Messages[lastUser], req.Model)
 	if err != nil {
 		return nil, err
 	}

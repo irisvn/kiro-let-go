@@ -37,6 +37,7 @@ type Dispatcher struct {
 type DispatcherConfig struct {
 	MaxAttempts int
 	BaseRetryMs int
+	ModelMapper *ModelMapper
 }
 
 // FullResponse contains the aggregated result of a non-streaming dispatch.
@@ -74,6 +75,8 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		return nil, nil, errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")
 	}
 	cfg := normalizeDispatcherConfig(d.cfg)
+	d.applyModelMapping(ctx, payload)
+	hint.Model = payload.ConversationState.CurrentMessage.UserInputMessage.ModelID
 	requestPayload, err := json.Marshal(payload)
 	if err != nil {
 		return nil, nil, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
@@ -229,6 +232,7 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 	if acc == nil {
 		return FullResponse{}, errs.New(errs.ClassFatal, "MISSING_ACCOUNT", "missing Kiro account")
 	}
+	d.applyModelMapping(ctx, payload)
 	requestPayload, err := json.Marshal(payload)
 	if err != nil {
 		return FullResponse{}, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
@@ -297,6 +301,33 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 		}
 	}
 	return full, nil
+}
+
+func (d *Dispatcher) applyModelMapping(ctx context.Context, payload *KiroPayload) {
+	if d == nil || payload == nil {
+		return
+	}
+	current := payload.ConversationState.CurrentMessage.UserInputMessage.ModelID
+	if current == "" {
+		return
+	}
+	if mapper := d.cfg.ModelMapper; mapper != nil {
+		if provider, ok := any(d.manager).(interface {
+			AvailableModels(context.Context) []string
+		}); ok {
+			current = mapper.ResolveWithFallback(current, provider.AvailableModels(ctx))
+		} else {
+			current = mapper.Resolve(current)
+		}
+	} else {
+		current = MapModel(current)
+	}
+	payload.ConversationState.CurrentMessage.UserInputMessage.ModelID = current
+	for i := range payload.ConversationState.History {
+		if msg := payload.ConversationState.History[i].UserInputMessage; msg != nil {
+			msg.ModelID = current
+		}
+	}
 }
 
 func (d *Dispatcher) forwardStream(ctx context.Context, acq *account.Acquisition, body io.ReadCloser, payload []byte) <-chan StreamEvent {

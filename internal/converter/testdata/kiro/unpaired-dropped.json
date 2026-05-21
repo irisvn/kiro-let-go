@@ -7,7 +7,7 @@
     "currentMessage": {
       "userInputMessage": {
         "content": "done?",
-        "modelId": "claude-sonnet-4.6",
+          "modelId": "sonnet-4.6",
         "origin": "AI_EDITOR"
       }
     },
