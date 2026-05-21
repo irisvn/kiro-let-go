@@ -177,6 +177,7 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 	events, meta, err := h.dispatcherStream(h.dispatcher, c.Request.Context(), payload, hint)
 	setRequestLogAccount(c, meta)
 	if err != nil {
+		_ = c.Error(err)
 		h.writeStreamError(c.Request.Context(), writer, err)
 		return
 	}
@@ -207,6 +208,7 @@ func (h *Handler) stream(c *gin.Context, req *MessagesRequest, payload *kiro.Kir
 			markStreamActivity(activity)
 			stop, err := state.handle(event)
 			if err != nil {
+				_ = c.Error(err)
 				if _, ok := event.(kiro.ErrorEvent); ok {
 					h.writeStreamError(c.Request.Context(), writer, err)
 					return
@@ -1044,6 +1046,7 @@ func setSSEHeaders(c *gin.Context) {
 }
 
 func writeJSONError(c *gin.Context, status int, err error) {
+	_ = c.Error(err)
 	classified := classifyHandlerError(err)
 	c.AbortWithStatusJSON(status, ErrorEvent{
 		Type: "error",

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/irisvn/kiro-let-go/internal/api/admin"
+	"github.com/irisvn/kiro-let-go/internal/kiro"
 )
 
 type RequestLogEntry = admin.RequestLogEntry
@@ -91,6 +93,11 @@ func (rl *RequestLog) appendToFile(entry RequestLogEntry) {
 	rl.fileMu.Lock()
 	defer rl.fileMu.Unlock()
 
+	// Check size and rotate if necessary (>= 30MB)
+	if info, err := os.Stat(rl.filePath); err == nil && info.Size() >= 30*1024*1024 {
+		rl.rotateFiles()
+	}
+
 	f, err := os.OpenFile(rl.filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return
@@ -103,6 +110,25 @@ func (rl *RequestLog) appendToFile(entry RequestLogEntry) {
 	}
 	_, _ = f.Write(line)
 	_, _ = f.Write([]byte("\n"))
+}
+
+func (rl *RequestLog) rotateFiles() {
+	maxBackups := 9
+	// 1. Remove oldest backup
+	oldestFile := fmt.Sprintf("%s.%d", rl.filePath, maxBackups)
+	_ = os.Remove(oldestFile)
+
+	// 2. Shift backups (8 down to 1)
+	for i := maxBackups - 1; i >= 1; i-- {
+		src := fmt.Sprintf("%s.%d", rl.filePath, i)
+		dst := fmt.Sprintf("%s.%d", rl.filePath, i+1)
+		if _, err := os.Stat(src); err == nil {
+			_ = os.Rename(src, dst)
+		}
+	}
+
+	// 3. Rename current file to .1
+	_ = os.Rename(rl.filePath, fmt.Sprintf("%s.1", rl.filePath))
 }
 
 func (rl *RequestLog) LoadFromFile() error {
@@ -183,6 +209,10 @@ func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
 			return
 		}
 
+		// Inject AttemptsCollector in request context
+		reqCtx, collector := kiro.WithAttemptsCollector(c.Request.Context())
+		c.Request = c.Request.WithContext(reqCtx)
+
 		model, stream, requestBody := peekRequestLogBody(c.Request)
 		bodyWriter := &requestLogResponseWriter{ResponseWriter: c.Writer, limit: requestLogSnippetLimit}
 		c.Writer = bodyWriter
@@ -215,8 +245,15 @@ func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
 			Format:          requestFormat(c.Request.URL.Path),
 			UserAgent:       c.Request.UserAgent(),
 		}
+		if collector != nil {
+			entry.Attempts = collector.Attempts
+		}
 		if len(c.Errors) > 0 {
-			entry.Error = c.Errors.Last().Error()
+			var errMsgs []string
+			for _, e := range c.Errors {
+				errMsgs = append(errMsgs, e.Error())
+			}
+			entry.Error = strings.Join(errMsgs, "; ")
 		}
 		rl.Add(entry)
 	}

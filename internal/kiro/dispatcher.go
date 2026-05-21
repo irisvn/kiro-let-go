@@ -90,10 +90,18 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		return nil, nil, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
 	}
 
+	collector := GetAttemptsCollector(ctx)
 	var lastErr error
 	for attempt := 0; attempt < cfg.MaxAttempts; attempt++ {
+		started := time.Now()
 		acq, err := d.manager.Acquire(ctx, hint)
 		if err != nil {
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt: attempt + 1,
+					Error:   fmt.Sprintf("acquire_account_error: %v", err),
+				})
+			}
 			if errors.Is(err, account.NoAccountsAvailable) || errors.Is(err, account.ErrNoCandidates) {
 				return nil, nil, err
 			}
@@ -107,6 +115,13 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 			continue
 		}
 		if acq == nil || acq.Account == nil {
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt:    attempt + 1,
+					DurationMs: time.Since(started).Milliseconds(),
+					Error:      "nil_acquisition",
+				})
+			}
 			lastErr = errs.New(errs.ClassRecoverable, "NIL_ACQUISITION", "account manager returned no account")
 			if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
 				return nil, nil, err
@@ -116,6 +131,16 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 
 		req, err := buildKiroRequest(acq.Account, requestPayload, acq.Token, acq.Region)
 		if err != nil {
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt:      attempt + 1,
+					AccountID:    acq.Account.ID,
+					AccountLabel: acq.Account.Label,
+					Region:       acq.Region,
+					DurationMs:   time.Since(started).Milliseconds(),
+					Error:        fmt.Sprintf("build_request_error: %v", err),
+				})
+			}
 			releaseFailure(acq, "build_request_error")
 			return nil, nil, err
 		}
@@ -130,6 +155,17 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 			}
 			classified := classifyResponse(resp, err)
 			lastErr = classified
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt:      attempt + 1,
+					AccountID:    acq.Account.ID,
+					AccountLabel: acq.Account.Label,
+					Region:       acq.Region,
+					Status:       resp.StatusCode,
+					DurationMs:   time.Since(started).Milliseconds(),
+					Error:        fmt.Sprintf("Kiro returned status %d: %v", resp.StatusCode, classified.Error()),
+				})
+			}
 			if isAuthStatus(resp.StatusCode) {
 				if refreshErr := d.manager.Refresh(ctx, acq.Account.ID); refreshErr != nil {
 					d.logger.Warn("failed to refresh account after auth failure", "account_id", acq.Account.ID, "error", refreshErr)
@@ -154,6 +190,16 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 			}
 			classified := classifyError(err)
 			lastErr = classified
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt:      attempt + 1,
+					AccountID:    acq.Account.ID,
+					AccountLabel: acq.Account.Label,
+					Region:       acq.Region,
+					DurationMs:   time.Since(started).Milliseconds(),
+					Error:        fmt.Sprintf("Kiro stream error: %v", classified.Error()),
+				})
+			}
 			if isRecoverable(classified) {
 				if errs.ClassOf(classified) != errs.ClassNetwork {
 					releaseFailure(acq, failureReason(classified))
@@ -168,6 +214,16 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 			return nil, meta, classified
 		}
 		if body == nil {
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt:      attempt + 1,
+					AccountID:    acq.Account.ID,
+					AccountLabel: acq.Account.Label,
+					Region:       acq.Region,
+					DurationMs:   time.Since(started).Milliseconds(),
+					Error:        "empty stream body",
+				})
+			}
 			lastErr = errs.New(errs.ClassRecoverable, "EMPTY_STREAM", "Kiro returned an empty stream body")
 			releaseFailure(acq, "empty_stream")
 			hint.ExcludeIDs = appendExcluded(hint.ExcludeIDs, acq.Account.ID)
@@ -189,12 +245,33 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 		if peekErr != nil {
 			_ = body.Close()
 			d.logger.Warn("First token timeout or error", "account_id", acq.Account.ID, "error", peekErr)
+			if collector != nil {
+				collector.Add(AttemptLog{
+					Attempt:      attempt + 1,
+					AccountID:    acq.Account.ID,
+					AccountLabel: acq.Account.Label,
+					Region:       acq.Region,
+					DurationMs:   time.Since(started).Milliseconds(),
+					Error:        fmt.Sprintf("first token timeout: %v", peekErr),
+				})
+			}
 			releaseFailure(acq, "first_token_timeout")
 			hint.ExcludeIDs = appendExcluded(hint.ExcludeIDs, acq.Account.ID)
 			if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
 				return nil, nil, err
 			}
 			continue
+		}
+
+		if collector != nil {
+			collector.Add(AttemptLog{
+				Attempt:      attempt + 1,
+				AccountID:    acq.Account.ID,
+				AccountLabel: acq.Account.Label,
+				Region:       acq.Region,
+				Status:       http.StatusOK,
+				DurationMs:   time.Since(started).Milliseconds(),
+			})
 		}
 
 		wrappedBody := struct {

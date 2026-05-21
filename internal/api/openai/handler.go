@@ -96,13 +96,16 @@ func handleStream(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletion
 	writer := NewSSEWriter(c.Writer, c.Writer, responseID, req.Model, created)
 
 	if dispatcher == nil {
-		writer.WriteError(classifyHandlerError(errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")))
+		err := errs.New(errs.ClassFatal, "DISPATCHER_NOT_READY", "dispatcher is not configured")
+		_ = c.Error(err)
+		writer.WriteError(classifyHandlerError(err))
 		return
 	}
 
 	events, meta, err := dispatcher.Stream(c.Request.Context(), payload, hint)
 	setRequestLogAccount(c, meta)
 	if err != nil {
+		_ = c.Error(err)
 		writer.WriteError(classifyHandlerError(err))
 		return
 	}
@@ -135,6 +138,7 @@ func handleStream(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletion
 			writer.WriteDone()
 			return
 		case kiro.ErrorEvent:
+			_ = c.Error(e.Err)
 			writer.WriteError(classifyHandlerError(e.Err))
 			return
 		}
@@ -305,6 +309,7 @@ func classifyHandlerError(err error) *errs.Error {
 }
 
 func writeJSONError(c *gin.Context, err *errs.Error) {
+	_ = c.Error(err)
 	classified := classifyHandlerError(err)
 	c.AbortWithStatusJSON(classified.HTTPStatus, struct {
 		Error openAIError `json:"error"`

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -11,6 +12,7 @@ func ProxyAuthMiddleware(proxyAPIKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := extractAPIKey(c)
 		if key == "" || key != proxyAPIKey {
+			_ = c.Error(errors.New("invalid or missing proxy API key"))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": gin.H{
 					"type":    "authentication_error",
@@ -28,6 +30,7 @@ func AdminAuthMiddleware(adminAPIKey string) gin.HandlerFunc {
 		auth := c.GetHeader("Authorization")
 		key, _ := strings.CutPrefix(auth, "Bearer ")
 		if key == "" || key != adminAPIKey {
+			_ = c.Error(errors.New("invalid or missing admin API key"))
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": gin.H{
 					"type":    "authentication_error",

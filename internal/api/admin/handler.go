@@ -1423,6 +1423,7 @@ func allowedFields(fields ...string) map[string]struct{} {
 }
 
 func writeError(c *gin.Context, status int, kind, message string) {
+	_ = c.Error(errors.New(message))
 	var resp errorResponse
 	resp.Error.Type = kind
 	resp.Error.Message = message
