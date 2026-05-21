@@ -10,6 +10,7 @@ Server khoi tao bang `gin.New()` (khong dung `gin.Default()`) de co toan quyen k
 
 ```go
 r := gin.New()
+gin.RedirectTrailingSlash = false
 
 r.Use(
     antiban.HealthProbeMiddleware(),
@@ -19,6 +20,8 @@ r.Use(
     middleware.CORSMiddleware(),
 )
 ```
+
+`gin.RedirectTrailingSlash = false` ngan chan gin tu dong redirect cac request co trailing slash (vi du `/admin/ui/` → `/admin/ui`), giup SPA routing hoat dong dung.
 
 Luu y: khong dung `gin.Default()` vi no tu dong gan Logger va Recovery middleware, trong khi project can dung custom implementations.
 
@@ -35,6 +38,7 @@ Thu tu middleware duoc ap dung cho moi request:
 | 5 | `CORSMiddleware` | Set CORS header (`*`, cho phep GET/POST/PUT/PATCH/DELETE/OPTIONS), tra 204 cho OPTIONS |
 | - | `ProxyAuthMiddleware` | Chi cho route `/v1/*` — kiem tra `Authorization: Bearer <key>` hoac `x-api-key: <key>` |
 | - | `AdminAuthMiddleware` | Chi cho route `/admin/*` — kiem tra `Authorization: Bearer <AdminAPIKey>` |
+| - | `RequestLogMiddleware` | Global — ghi log chi tiet request/response cho `/v1/*` va cac route test `/admin/*/chat-test`, `/admin/*/test` |
 
 ## Routes
 
@@ -53,6 +57,14 @@ Thu tu middleware duoc ap dung cho moi request:
 | POST | `/admin/accounts/:id/refresh` | AdminAPIKey | Force refresh token |
 | GET | `/admin/accounts/:id/quota` | AdminAPIKey | Quota cua mot account |
 | GET | `/admin/quota` | AdminAPIKey | Quota summary across all accounts |
+| GET | `/admin/accounts/:id/models` | AdminAPIKey | List available models cua mot account (goi Kiro API thuc) |
+| POST | `/admin/accounts/:id/test` | AdminAPIKey | Test connection bang `getUsageLimits` |
+| POST | `/admin/accounts/:id/chat-test` | AdminAPIKey | Gui request chat thuc de kiem tra account |
+| POST | `/admin/accounts/:id/reset-circuit` | AdminAPIKey | Reset circuit breaker cua mot account |
+| GET | `/admin/models` | AdminAPIKey | Danh sach models duoc ho tro |
+| GET | `/admin/settings` | AdminAPIKey | Lay current settings (dynamic config) |
+| POST | `/admin/settings` | AdminAPIKey | Update settings runtime |
+| GET | `/admin/proxy/*` | AdminAPIKey | Proxy cac request admin den Kiro upstream |
 
 ## Health endpoint
 
@@ -96,6 +108,36 @@ Cac `type` pho bien:
 - `invalid_request_error` — 400, request body hoac parameter khong hop le
 - `internal_error` — 500, loi server noi bo
 - `not_found_error` — 404, resource khong ton tai
+
+## Admin UI (React SPA)
+
+Admin UI duoc build thanh React SPA va duoc embed vao binary Go qua `embed.FS`. Server serve cac static files tai path `/admin/ui/`:
+
+```go
+//go:embed all:web/dist
+var webDist embed.FS
+```
+
+`NoRoute` handler duoc dang ky de ho tro SPA routing: moi path khong khop voi API routes se duoc serve `index.html`, cho phep React Router xu ly client-side navigation:
+
+```go
+r.NoRoute(func(c *gin.Context) {
+    // Serve index.html cho SPA routes
+})
+```
+
+UI truoc day dung Alpine.js, hien tai da chuyen sang React voi build pipeline qua npm.
+
+## Makefile build-ui target
+
+Target `build-ui` trong Makefile dam bao UI duoc build truoc khi compile Go:
+
+```makefile
+build-ui:
+	cd web && npm ci && npm run build
+```
+
+Day la prerequisite cua target `build` chinh, dam bao `web/dist` ton tai truoc khi `go build` embed static assets.
 
 ## Server configuration
 

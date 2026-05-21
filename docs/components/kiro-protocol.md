@@ -63,7 +63,7 @@ Cac truong quan trong:
 - `currentMessage.userInputMessage.content`: prompt cua user.
 - `currentMessage.userInputMessage.modelId`: model Kiro (vi du `claude-sonnet-4.6`).
 - `history`: mang cac turn truoc do, co the la `UserInputMessage` hoac `AssistantResponseMessage`.
-- `profileArn`: optional, neu account co gia tri nay thi se duoc inject vao payload.
+- `profileArn`: optional, neu account co gia tri nay thi se duoc inject vao payload. Voi social accounts khong co `profileArn` trong DB, dispatcher tu dong inject `arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK`.
 
 ---
 
@@ -101,15 +101,17 @@ Parser ho tro day du cac header value types theo AWS Event Stream spec:
 | 8 | timestamp (int64 millis, RFC3339Nano) |
 | 9 | UUID (16 bytes) |
 
-### CRC32C validation
+### CRC32-IEEE validation
 
-Ca prelude CRC va message CRC deu duoc validate bang CRC32C (Castagnoli table):
+Ca prelude CRC va message CRC deu duoc validate bang CRC32-IEEE (khong phai CRC32C Castagnoli):
 
 ```go
-var crc32cTable = crc32.MakeTable(crc32.Castagnoli)
+var crc32Table = crc32.MakeTable(crc32.IEEE)
 ```
 
 Neu checksum khong khop, parser se skip frame hien tai va thu `recoverBuffer()`. Recovery tim kiem trong buffer con lai de tim mot prelude hop le (co total_length, headers_length hop ly va prelude CRC dung). Neu tim thay, parser tiep tuc tu vi tri do. Neu khong, giu lai toi da 11 bytes cuoi de cho them data.
+
+Luu y: AWS Event Stream spec su dung CRC32-IEEE, khong phai CRC32C. Viec dung sai polynomial se dan den checksum mismatch lien tuc.
 
 ### DecodeEvent
 
@@ -168,8 +170,20 @@ Proxy isolation dam bao rang cac account khac nhau khong bao gio chia se connect
 |----------|-------------|
 | Generate assistant response | `https://q.{region}.amazonaws.com/generateAssistantResponse` |
 | Get usage limits | `https://q.{region}.amazonaws.com/getUsageLimits` |
+| List available models | `https://q.{region}.amazonaws.com/ListAvailableModels?origin=AI_EDITOR&maxResults=50` |
 
 `region` lay tu account field theo thu tu uu tien: `APIRegion` → `Region` → `us-east-1`.
+
+`ListAvailableModels` tra ve danh sach models thuc ma Kiro ho tro, khong phai hardcoded list. Response duoc parse va tra ve client qua `GET /admin/accounts/:id/models`.
+
+## Minimal headers pattern
+
+Cac endpoint chi can lay thong tin co ban (`getUsageLimits` va `ListAvailableModels`) chi yeu cau 2 headers:
+
+- `Authorization: Bearer <token>`
+- `Content-Type: application/json`
+
+Khong can full KiroIDE User-Agent, khong can `x-amzn-codewhisperer-optout`, khong can `profileArn`. Dieu nay giup cac request kiem tra quota/model hoat dong ngay ca khi account chua co day du anti-ban config.
 
 ---
 

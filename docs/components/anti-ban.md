@@ -24,7 +24,17 @@ func Generate(seed string) string {
 
 ---
 
-## Ky thuat 2: Header randomization (stable per account)
+## Ky thuat 2: Default profileArn injection
+
+Voi social accounts, neu khong co `profileArn` trong database, proxy tu dong inject gia tri mac dinh:
+
+```
+arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK
+```
+
+Day la profile ARN mac dinh cua Kiro IDE, giup social accounts hoat dong ngay ma khong can cau hinh thu cong.
+
+## Ky thuat 3: Header randomization (stable per account)
 
 Proxy build request headers sao cho cung mot account luon gui cung fingerprint, nhung khac account thi fingerprint khac nhau. Dieu nay quan trong vi "random UA per request" lai chinh la dau hieu anomaly.
 
@@ -69,7 +79,24 @@ api/codewhispererstreaming#1.0.34 m/E KiroIDE-1.0.34-<machine_id>
 
 ---
 
-## Ky thuat 3: Per-account proxy
+## Ky thuat 4: CRC32-IEEE cho AWS Event Stream
+
+AWS Event Stream parser dung CRC32 voi IEEE polynomial (CRC32-IEEE), khong phai CRC32C (Castagnoli). Day la su khac biet quan trong vi checksum se khong khop neu dung sai table.
+
+```go
+var crc32Table = crc32.MakeTable(crc32.IEEE)
+```
+
+## Ky thuat 5: Minimal headers cho quota/models
+
+Cac endpoint `getUsageLimits` va `ListAvailableModels` khong can full KiroIDE User-Agent. Chi can:
+
+- `Authorization: Bearer <token>`
+- `Content-Type: application/json`
+
+Dieu nay tranh yeu cau `profileArn` cho cac request chi can lay thong tin co ban, giup cac tool kiem tra quota hoat dong ngay ca khi account chua co profile ARN day du.
+
+## Ky thuat 6: Per-account proxy
 
 Moi account co the co proxy rieng (HTTP, HTTPS, hoac SOCKS5). Proxy nay duoc cau hinh qua cac fields:
 
@@ -101,7 +128,7 @@ Dieu nay dam bao:
 
 ---
 
-## Ky thuat 4: Health-probe avoidance
+## Ky thuat 7: Health-probe avoidance
 
 Proxy chu dong tranh cac pattern giong health check / monitoring de khong tao ra traffic deu dan ma Kiro co the flag.
 
@@ -125,7 +152,7 @@ Circuit breaker van cho phep `10%` requests thu lai cac account dang cooldown. D
 
 ---
 
-## Ky thuat 5: Failure-based cooldown (circuit breaker)
+## Ky thuat 8: Failure-based cooldown (circuit breaker)
 
 Khi mot account lien tuc that bai, no se bi tam thoi loai khoi rotation bang exponential backoff. Chi tiet day du xem tai `load-balancing.md`. Tom tat:
 

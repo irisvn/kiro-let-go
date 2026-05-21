@@ -226,6 +226,30 @@ for _, id := range droppedIDs {
 
 ---
 
+## Smart Model Normalization
+
+Truoc khi mapping, model name duoc normalize de xu ly cac dinh dang khong nhat quan tu client:
+
+- Strip prefix sau `/` (vi du `kiro/claude-sonnet-4-6` → `claude-sonnet-4-6`).
+- Fix separators: `4-6` → `4.6`, `_` → `-`.
+- Case insensitive: `Claude-Sonnet-4.6` → `claude-sonnet-4.6`.
+
+Vi du:
+
+| Input | Sau normalize |
+|-------|---------------|
+| `kiro/claude-sonnet-4-6` | `claude-sonnet-4.6` |
+| `claude_sonnet_4_6` | `claude-sonnet-4.6` |
+| `Claude-Opus-4-7` | `claude-opus-4.7` |
+
+## Single mapping point
+
+Chi co `kiro.Dispatcher` thuc hien model mapping. Cac handler (Anthropic, OpenAI) va converter khong duplicate logic mapping. Dieu nay dam bao:
+
+- Mot diem sua duy nhat khi them model moi.
+- Khong co inconsistency giua cac API surfaces.
+- Fallback chains duoc xu ly o mot noi.
+
 ## Model mapping
 
 `MapModel` là hàm table-driven trong `internal/kiro/types.go`:
@@ -270,3 +294,23 @@ func MapModel(input string) string {
 | `haiku-4.5` / `claude-haiku-4.5` | `claude-haiku-4.5` |
 
 Nếu input không khớp bất kỳ case nào, trả về nguyên input (passthrough).
+
+## Reliability Pipeline (truoc khi gui Kiro)
+
+Truoc khi gui request den Kiro, payload di qua 3 buoc reliability:
+
+### 1. JSON Schema Normalization
+
+- Fix `required: null` → xoa field `required`.
+- Fix `properties: null` → thay bang `{}`.
+- Xoa `additionalProperties` (Kiro khong ho tro).
+
+### 2. Tool Name Shortening
+
+Ten tool > 63 ky tu se bi rut ngan thanh 54-ky tu prefix + `_` + 8-ky tu SHA256 hash. Ten goc duoc restore khi nhan response.
+
+Vi du: `very_long_tool_name_that_exceeds_sixty_three_characters_limit` → `very_long_tool_name_that_exceeds_sixty_three_char_abc123de`
+
+### 3. Payload Size Guard
+
+Neu payload > 600KB, he thong tu dong trim cac cap history cu nhat (oldest user/assistant pairs) cho den khi duoi nguong. Dieu nay ngan chan request bi reject vi qua lon ma khong mat context gan nhat.

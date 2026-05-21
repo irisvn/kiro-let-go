@@ -221,6 +221,34 @@ Flag dac biet:
 
 ---
 
+## Token Auto-Refresh Background Loop
+
+Mot goroutine chay background moi 5 phut de tu dong refresh social tokens truoc khi het han:
+
+- Kiem tra tat ca account co `auth_method == "social"` va token sap het han (trong vong 10 phut).
+- Goi refresh token tuong ung.
+- Neu refresh that bai va token da het han, account se bi auto-disable.
+- Goroutine nay chay lien tuc trong vong doi server, khong can trigger tu client.
+
+## Circuit Breaker cai tien
+
+Circuit breaker da duoc cai tien so voi phien ban truoc:
+
+- **Threshold 3 failures**: account chi bi block sau 3 lan fail lien tiep (khong phai 1).
+- **Reset endpoint**: `POST /admin/accounts/:id/reset-circuit` cho phep admin reset thu cong.
+- **Auto-recovery**: khi tat ca accounts bi circuit breaker block, he thong tu dong reset tat ca circuits de khoi phuc.
+- **Network errors khong count**: cac loi network nhu timeout, DNS fail khong lam tang `failure_count`, chi trigger retry ma khong penalize account.
+
+## Test Connection va Chat Test
+
+| Endpoint | Mo ta |
+|----------|-------|
+| `POST /admin/accounts/:id/test` | Goi `getUsageLimits` de kiem tra connection. Tra ve quota hien tai hoac loi neu khong ket noi duoc. |
+| `POST /admin/accounts/:id/chat-test` | Gui mot request chat thuc (non-streaming) den Kiro qua account. Tra ve response hoac loi chi tiet. |
+| `GET /admin/accounts/:id/models` | Goi `ListAvailableModels` API thuc cua Kiro de lay danh sach models ma account co the dung. |
+
+Cac endpoint nay giup admin xac minh account hoat dong binh thuong ma khong can dung CLI.
+
 ## 3 kenh them account
 
 | | CLI | REST API | JSON file watch |

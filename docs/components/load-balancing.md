@@ -1,5 +1,27 @@
 # Load Balancing
 
+## Weighted Model Mapping
+
+Proxy ho tro weighted model mapping voi 3 rule types de dieu khien model selection:
+
+| Rule Type | Mo ta |
+|-----------|-------|
+| `replace` | Thay the model A thanh model B hoan toan. |
+| `alias` | Tao alias cho model, client gui alias va server map sang model thuc. |
+| `loadbalance` | Phan phoi request giua nhieu models theo trong so (weight). |
+
+Mapping duoc dinh nghia trong config va co the thay doi runtime tu Admin UI.
+
+## Fallback Chains
+
+Khi model chinh khong co san, dispatcher tu dong thu cac model thay the theo fallback chain. Vi du:
+
+```
+opus-4.7 → opus-4.6 → opus-4.5 → sonnet-4.6
+```
+
+Day la co che tu dong, khong can client thay doi request.
+
 ## 3 strategies
 
 Proxy ho tro 3 chien luoc chon account qua interface `Balancer`.
@@ -27,6 +49,8 @@ Luu y: `most_quota` khong block `Pick()` de fetch quota. No dung cache hien co; 
 
 - `strategy`: mac dinh `round_robin`. Co the la `balanced` hoac `most_quota`.
 - `sticky_session`: neu `true`, consecutive request cung conversation se co gang dung lai account thanh cong gan nhat nhat (in-memory `lastSuccessfulID`).
+
+Ca hai field `strategy` va `sticky_session` deu co the thay doi tu Admin UI (`/admin/settings`) ma khong can restart server. Thay doi co hieu luc ngay lap tuc cho cac request moi.
 
 ---
 
@@ -131,6 +155,20 @@ Voi `BaseRetryMs = 100`, day la cac khoang backoff (tinh ca jitter):
 | 4+ | 2000-2500ms |
 
 ---
+
+## Auto-Recovery
+
+Khi tat ca accounts bi disable boi circuit breaker (khong con candidate nao available), he thong tu dong trigger reset toan bo circuits. Day la co che "auto-recovery" giup he thong tu khoi phuc ma khong can admin can thiep thu cong.
+
+## Network Error Isolation
+
+Cac loi network (DNS fail, timeout, connection refused) duoc classify la `ClassNetwork`. Cac loi nay:
+
+- Khong lam tang `failure_count` cua account.
+- Chi trigger retry voi account khac.
+- Khong penalize account bi loi network.
+
+Dieu nay ngan chan mot account bi block chi vi van de network tam thoi.
 
 ## Once method
 

@@ -62,12 +62,22 @@ Neu thieu hoac sai key, tra 401 voi `authentication_error`.
 
 ## Validation
 
-- `model` khong duoc de trong va phai chua "claude" (case-insensitive).
+- `model` khong duoc de trong va phai chua "claude" (case-insensitive). Cac model khong phai Claude se bi reject.
 - `max_tokens` phai > 0.
 - `messages` khong duoc rong.
 - Moi message phai co `role` la `"user"` hoac `"assistant"`.
 
 Neu validation that bai, tra 400 voi `invalid_request_error`.
+
+## Smart model normalization
+
+Truoc khi gui den Kiro, model name duoc normalize tu dong:
+
+- Strip prefix sau `/`: `kiro/claude-sonnet-4-6` → `claude-sonnet-4.6`.
+- Fix separators: `4-6` → `4.6`, `_` → `-`.
+- Case insensitive.
+
+Client co the gui `kiro/claude-sonnet-4-6` va server se tu dong chuyen thanh `claude-sonnet-4.6` truoc khi goi Kiro.
 
 ## Streaming response (SSE)
 

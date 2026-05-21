@@ -62,10 +62,18 @@ Chi chap nhan **data URL** (base64). HTTP/HTTPS URLs bi reject voi loi `IMAGE_UR
 
 ## Validation
 
-- `model` khong duoc de trong va phai chua "claude".
+- `model` khong duoc de trong va phai chua "claude" (case-insensitive). Cac model khong phai Claude se bi reject.
 - `messages` khong duoc rong.
 - Valid roles: `"system"`, `"user"`, `"assistant"`, `"tool"`.
 - Message co `role: "tool"` bat buoc phai co `tool_call_id`.
+
+## Smart model normalization
+
+Truoc khi gui den Kiro, model name duoc normalize tu dong (giong nhu Anthropic handler):
+
+- Strip prefix sau `/`: `kiro/claude-sonnet-4-6` → `claude-sonnet-4.6`.
+- Fix separators: `4-6` → `4.6`, `_` → `-`.
+- Case insensitive.
 
 ## Streaming response
 

@@ -143,9 +143,9 @@ const retainBytes = len("</reasoning>") + 2
 
 ---
 
-## Periodic ping
+## Periodic ping (keep-alive)
 
-Anthropic handler chạy một goroutine riêng gửi `ping` event mỗi 25 giây khi không có event nào được gửi. Goroutine này dừng khi stream hoàn tất.
+Anthropic handler chạy một goroutine riêng gửi `ping` event mỗi 25 giây khi không có event nào được gửi. Day la co che keep-alive de tranh client timeout khi Kiro khong gui event trong thoi gian dai.
 
 ```go
 const anthropicPingInterval = 25 * time.Second
@@ -160,4 +160,6 @@ Cơ chế hoạt động:
 go h.runPingLoop(c.Request.Context(), writer, activity, done, pingDone)
 ```
 
-`internal/streaming/sse.go` hiện tại chỉ là bootstrap placeholder (`type SSE struct{}`), chưa chứa logic thực tế.
+## CRC32-IEEE trong Event Stream
+
+Event stream parser dung CRC32-IEEE (da fix tu CRC32C Castagnoli). Xem chi tiet tai [kiro-protocol.md](kiro-protocol.md).
