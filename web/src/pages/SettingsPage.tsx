@@ -60,6 +60,11 @@ export function SettingsPage() {
         probabilistic_retry_chance: Number(draft.probabilistic_retry_chance),
         max_attempts: Number(draft.max_attempts),
         cache_ttl_seconds: Number(draft.cache_ttl_seconds),
+        first_token_timeout_sec: Number(draft.first_token_timeout_sec),
+        first_token_max_retries: Number(draft.first_token_max_retries),
+        streaming_read_timeout_sec: Number(draft.streaming_read_timeout_sec),
+        fake_reasoning_max_tokens: Number(draft.fake_reasoning_max_tokens),
+        fake_reasoning_budget_cap: Number(draft.fake_reasoning_budget_cap),
       })
       toast('Settings saved and applied (no restart needed)', 'success')
     } catch (e) {
@@ -95,12 +100,42 @@ export function SettingsPage() {
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Failover</h3>
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Failover & Timeouts</h3>
         <div className="grid gap-4 md:grid-cols-4">
           <NumberField label="Base cooldown (sec)" value={draft.base_cooldown_sec} onChange={(v) => patch({ base_cooldown_sec: v })} />
           <NumberField label="Max backoff multiplier" value={draft.max_backoff_multiplier} onChange={(v) => patch({ max_backoff_multiplier: v })} />
           <NumberField label="Retry chance" value={draft.probabilistic_retry_chance} step="0.01" min="0" max="1" onChange={(v) => patch({ probabilistic_retry_chance: v })} />
           <NumberField label="Max attempts" value={draft.max_attempts} onChange={(v) => patch({ max_attempts: v })} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3 pt-2 border-t border-slate-800">
+          <NumberField label="First token timeout (sec)" value={draft.first_token_timeout_sec} onChange={(v) => patch({ first_token_timeout_sec: v })} />
+          <NumberField label="First token max retries" value={draft.first_token_max_retries} onChange={(v) => patch({ first_token_max_retries: v })} />
+          <NumberField label="Total streaming timeout (sec)" value={draft.streaming_read_timeout_sec} onChange={(v) => patch({ streaming_read_timeout_sec: v })} />
+        </div>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">MCP Web Search</h3>
+        <div className="flex items-center gap-4">
+          <Toggle label="Enable Web Search via MCP API" checked={draft.web_search_enabled} onChange={(v) => patch({ web_search_enabled: v })} />
+        </div>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Extended Thinking (Fake Reasoning)</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="flex items-center">
+            <Toggle label="Enable Extended Thinking Mode" checked={draft.fake_reasoning_enabled} onChange={(v) => patch({ fake_reasoning_enabled: v })} />
+          </div>
+          <NumberField label="Max thinking tokens" value={draft.fake_reasoning_max_tokens} onChange={(v) => patch({ fake_reasoning_max_tokens: v })} />
+          <NumberField label="Thinking budget cap" value={draft.fake_reasoning_budget_cap} onChange={(v) => patch({ fake_reasoning_budget_cap: v })} />
+        </div>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Truncation Recovery</h3>
+        <div className="flex items-center gap-4">
+          <Toggle label="Enable Truncation Recovery & Notices" checked={draft.truncation_recovery_enabled} onChange={(v) => patch({ truncation_recovery_enabled: v })} />
         </div>
       </section>
 

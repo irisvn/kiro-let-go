@@ -693,6 +693,7 @@ func normalizedToKiro(req *handlerNormalizedRequest, profileArn string) (*kiro.K
 	}
 
 	cleanHistory, cleanCurrent, _ := handlerValidatePairing(history, current)
+	prependSystemPrompt(cleanHistory, &cleanCurrent, req.SystemPrompt)
 	return &kiro.KiroPayload{
 		ConversationState: kiro.ConversationState{
 			ConversationID:      uuid.NewString(),
@@ -704,6 +705,29 @@ func normalizedToKiro(req *handlerNormalizedRequest, profileArn string) (*kiro.K
 		},
 		ProfileArn: profileArn,
 	}, nil
+}
+
+func prependSystemPrompt(history []kiro.HistoryItem, current *kiro.CurrentMessage, systemPrompt string) {
+	if systemPrompt == "" {
+		return
+	}
+	for i := range history {
+		if history[i].UserInputMessage != nil {
+			original := history[i].UserInputMessage.Content
+			if original == "" {
+				history[i].UserInputMessage.Content = systemPrompt
+			} else {
+				history[i].UserInputMessage.Content = systemPrompt + "\n\n" + original
+			}
+			return
+		}
+	}
+	original := current.UserInputMessage.Content
+	if original == "" {
+		current.UserInputMessage.Content = systemPrompt
+	} else {
+		current.UserInputMessage.Content = systemPrompt + "\n\n" + original
+	}
 }
 
 func handlerLastUserMessageIndex(messages []handlerNormalizedMessage) int {

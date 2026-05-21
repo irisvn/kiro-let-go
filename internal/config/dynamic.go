@@ -20,6 +20,16 @@ const (
 	settingsKeyMaxAttempts              = "max_attempts"
 	settingsKeyCacheTTLSeconds          = "cache_ttl_seconds"
 	settingsKeyModelMappings            = "model_mappings"
+
+	// New Ported settings from kiro-gateway
+	settingsKeyWebSearchEnabled          = "web_search_enabled"
+	settingsKeyFirstTokenTimeoutSec      = "first_token_timeout_sec"
+	settingsKeyFirstTokenMaxRetries      = "first_token_max_retries"
+	settingsKeyStreamingReadTimeoutSec   = "streaming_read_timeout_sec"
+	settingsKeyTruncationRecoveryEnabled = "truncation_recovery_enabled"
+	settingsKeyFakeReasoningEnabled      = "fake_reasoning_enabled"
+	settingsKeyFakeReasoningMaxTokens    = "fake_reasoning_max_tokens"
+	settingsKeyFakeReasoningBudgetCap    = "fake_reasoning_budget_cap"
 )
 
 // DynamicConfig stores runtime-editable settings loaded from SQLite.
@@ -43,6 +53,16 @@ type DynamicConfig struct {
 	// Model Mappings
 	ModelMappings []ModelMappingRule
 
+	// New Ported settings from kiro-gateway
+	WebSearchEnabled          bool
+	FirstTokenTimeoutSec      int
+	FirstTokenMaxRetries      int
+	StreamingReadTimeoutSec   int
+	TruncationRecoveryEnabled bool
+	FakeReasoningEnabled      bool
+	FakeReasoningMaxTokens    int
+	FakeReasoningBudgetCap    int
+
 	// Listeners (notified on change)
 	listeners []func()
 }
@@ -57,6 +77,16 @@ type DynamicSettings struct {
 	MaxAttempts              int                `json:"max_attempts"`
 	CacheTTLSeconds          int                `json:"cache_ttl_seconds"`
 	ModelMappings            []ModelMappingRule `json:"model_mappings"`
+
+	// New Ported settings from kiro-gateway
+	WebSearchEnabled          bool `json:"web_search_enabled"`
+	FirstTokenTimeoutSec      int  `json:"first_token_timeout_sec"`
+	FirstTokenMaxRetries      int  `json:"first_token_max_retries"`
+	StreamingReadTimeoutSec   int  `json:"streaming_read_timeout_sec"`
+	TruncationRecoveryEnabled bool `json:"truncation_recovery_enabled"`
+	FakeReasoningEnabled      bool `json:"fake_reasoning_enabled"`
+	FakeReasoningMaxTokens    int  `json:"fake_reasoning_max_tokens"`
+	FakeReasoningBudgetCap    int  `json:"fake_reasoning_budget_cap"`
 }
 
 // NewDynamicConfig creates an empty dynamic config backed by db.
@@ -123,6 +153,15 @@ func (dc *DynamicConfig) SeedFromStatic(cfg *Config) error {
 		MaxAttempts:              cfg.Failover.MaxAttempts,
 		CacheTTLSeconds:          cfg.Quota.CacheTTLSeconds,
 		ModelMappings:            copyModelMappings(cfg.ModelMappings),
+
+		WebSearchEnabled:          false,
+		FirstTokenTimeoutSec:      15,
+		FirstTokenMaxRetries:      3,
+		StreamingReadTimeoutSec:   300,
+		TruncationRecoveryEnabled: true,
+		FakeReasoningEnabled:      true,
+		FakeReasoningMaxTokens:    1024,
+		FakeReasoningBudgetCap:    0,
 	}
 	return dc.Update(settings)
 }
@@ -143,6 +182,15 @@ func (dc *DynamicConfig) Get() DynamicSettings {
 		MaxAttempts:              dc.MaxAttempts,
 		CacheTTLSeconds:          dc.CacheTTLSeconds,
 		ModelMappings:            copyModelMappings(dc.ModelMappings),
+
+		WebSearchEnabled:          dc.WebSearchEnabled,
+		FirstTokenTimeoutSec:      dc.FirstTokenTimeoutSec,
+		FirstTokenMaxRetries:      dc.FirstTokenMaxRetries,
+		StreamingReadTimeoutSec:   dc.StreamingReadTimeoutSec,
+		TruncationRecoveryEnabled: dc.TruncationRecoveryEnabled,
+		FakeReasoningEnabled:      dc.FakeReasoningEnabled,
+		FakeReasoningMaxTokens:    dc.FakeReasoningMaxTokens,
+		FakeReasoningBudgetCap:    dc.FakeReasoningBudgetCap,
 	}
 }
 
@@ -237,6 +285,15 @@ func (dc *DynamicConfig) apply(settings DynamicSettings) {
 	dc.MaxAttempts = settings.MaxAttempts
 	dc.CacheTTLSeconds = settings.CacheTTLSeconds
 	dc.ModelMappings = copyModelMappings(settings.ModelMappings)
+
+	dc.WebSearchEnabled = settings.WebSearchEnabled
+	dc.FirstTokenTimeoutSec = settings.FirstTokenTimeoutSec
+	dc.FirstTokenMaxRetries = settings.FirstTokenMaxRetries
+	dc.StreamingReadTimeoutSec = settings.StreamingReadTimeoutSec
+	dc.TruncationRecoveryEnabled = settings.TruncationRecoveryEnabled
+	dc.FakeReasoningEnabled = settings.FakeReasoningEnabled
+	dc.FakeReasoningMaxTokens = settings.FakeReasoningMaxTokens
+	dc.FakeReasoningBudgetCap = settings.FakeReasoningBudgetCap
 }
 
 func (dc *DynamicConfig) notify() {
@@ -250,31 +307,23 @@ func (dc *DynamicConfig) notify() {
 
 func settingsFromRows(values map[string]string) (DynamicSettings, error) {
 	settings := DynamicSettings{Strategy: strings.TrimSpace(values[settingsKeyStrategy])}
-	var err error
-	settings.StickySession, err = strconv.ParseBool(values[settingsKeyStickySession])
-	if err != nil {
-		return settings, fmt.Errorf("parse sticky_session: %w", err)
-	}
-	settings.BaseCooldownSec, err = strconv.Atoi(values[settingsKeyBaseCooldownSec])
-	if err != nil {
-		return settings, fmt.Errorf("parse base_cooldown_sec: %w", err)
-	}
-	settings.MaxBackoffMultiplier, err = strconv.Atoi(values[settingsKeyMaxBackoffMultiplier])
-	if err != nil {
-		return settings, fmt.Errorf("parse max_backoff_multiplier: %w", err)
-	}
-	settings.ProbabilisticRetryChance, err = strconv.ParseFloat(values[settingsKeyProbabilisticRetryChance], 64)
-	if err != nil {
-		return settings, fmt.Errorf("parse probabilistic_retry_chance: %w", err)
-	}
-	settings.MaxAttempts, err = strconv.Atoi(values[settingsKeyMaxAttempts])
-	if err != nil {
-		return settings, fmt.Errorf("parse max_attempts: %w", err)
-	}
-	settings.CacheTTLSeconds, err = strconv.Atoi(values[settingsKeyCacheTTLSeconds])
-	if err != nil {
-		return settings, fmt.Errorf("parse cache_ttl_seconds: %w", err)
-	}
+	
+	settings.StickySession = parseBoolWithDefault(values[settingsKeyStickySession], true)
+	settings.BaseCooldownSec = parseIntWithDefault(values[settingsKeyBaseCooldownSec], 60)
+	settings.MaxBackoffMultiplier = parseIntWithDefault(values[settingsKeyMaxBackoffMultiplier], 1440)
+	settings.ProbabilisticRetryChance = parseFloatWithDefault(values[settingsKeyProbabilisticRetryChance], 0.1)
+	settings.MaxAttempts = parseIntWithDefault(values[settingsKeyMaxAttempts], 9)
+	settings.CacheTTLSeconds = parseIntWithDefault(values[settingsKeyCacheTTLSeconds], 43200)
+
+	settings.WebSearchEnabled = parseBoolWithDefault(values[settingsKeyWebSearchEnabled], false)
+	settings.FirstTokenTimeoutSec = parseIntWithDefault(values[settingsKeyFirstTokenTimeoutSec], 15)
+	settings.FirstTokenMaxRetries = parseIntWithDefault(values[settingsKeyFirstTokenMaxRetries], 3)
+	settings.StreamingReadTimeoutSec = parseIntWithDefault(values[settingsKeyStreamingReadTimeoutSec], 300)
+	settings.TruncationRecoveryEnabled = parseBoolWithDefault(values[settingsKeyTruncationRecoveryEnabled], true)
+	settings.FakeReasoningEnabled = parseBoolWithDefault(values[settingsKeyFakeReasoningEnabled], true)
+	settings.FakeReasoningMaxTokens = parseIntWithDefault(values[settingsKeyFakeReasoningMaxTokens], 1024)
+	settings.FakeReasoningBudgetCap = parseIntWithDefault(values[settingsKeyFakeReasoningBudgetCap], 0)
+
 	if raw := strings.TrimSpace(values[settingsKeyModelMappings]); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &settings.ModelMappings); err != nil {
 			return settings, fmt.Errorf("parse model_mappings: %w", err)
@@ -298,6 +347,15 @@ func rowsFromSettings(settings DynamicSettings) (map[string]string, error) {
 		settingsKeyMaxAttempts:              strconv.Itoa(settings.MaxAttempts),
 		settingsKeyCacheTTLSeconds:          strconv.Itoa(settings.CacheTTLSeconds),
 		settingsKeyModelMappings:            string(mappings),
+
+		settingsKeyWebSearchEnabled:          strconv.FormatBool(settings.WebSearchEnabled),
+		settingsKeyFirstTokenTimeoutSec:      strconv.Itoa(settings.FirstTokenTimeoutSec),
+		settingsKeyFirstTokenMaxRetries:      strconv.Itoa(settings.FirstTokenMaxRetries),
+		settingsKeyStreamingReadTimeoutSec:   strconv.Itoa(settings.StreamingReadTimeoutSec),
+		settingsKeyTruncationRecoveryEnabled: strconv.FormatBool(settings.TruncationRecoveryEnabled),
+		settingsKeyFakeReasoningEnabled:      strconv.FormatBool(settings.FakeReasoningEnabled),
+		settingsKeyFakeReasoningMaxTokens:    strconv.Itoa(settings.FakeReasoningMaxTokens),
+		settingsKeyFakeReasoningBudgetCap:    strconv.Itoa(settings.FakeReasoningBudgetCap),
 	}, nil
 }
 
@@ -318,4 +376,37 @@ func copyModelMappings(in []ModelMappingRule) []ModelMappingRule {
 		out[i].Weights = append([]int(nil), rule.Weights...)
 	}
 	return out
+}
+
+func parseBoolWithDefault(val string, def bool) bool {
+	if val == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		return def
+	}
+	return b
+}
+
+func parseIntWithDefault(val string, def int) int {
+	if val == "" {
+		return def
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		return def
+	}
+	return i
+}
+
+func parseFloatWithDefault(val string, def float64) float64 {
+	if val == "" {
+		return def
+	}
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		return def
+	}
+	return f
 }

@@ -21,6 +21,14 @@ export interface DynamicSettings {
   max_attempts: number
   cache_ttl_seconds: number
   model_mappings: ModelMappingRule[]
+  web_search_enabled: boolean
+  first_token_timeout_sec: number
+  first_token_max_retries: number
+  streaming_read_timeout_sec: number
+  truncation_recovery_enabled: boolean
+  fake_reasoning_enabled: boolean
+  fake_reasoning_max_tokens: number
+  fake_reasoning_budget_cap: number
 }
 
 export interface AvailableModel {

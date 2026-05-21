@@ -37,6 +37,8 @@ func NormalizedToKiro(req *NormalizedRequest, profileArn string) (*kiro.KiroPayl
 		slog.Warn("dropping unpaired tool_use/tool_result", "tool_use_id", id)
 	}
 
+	prependSystemPrompt(cleanHistory, &cleanCurrent, req.SystemPrompt)
+
 	return &kiro.KiroPayload{
 		ConversationState: kiro.ConversationState{
 			ConversationID:  uuid.NewString(),
@@ -46,6 +48,29 @@ func NormalizedToKiro(req *NormalizedRequest, profileArn string) (*kiro.KiroPayl
 		},
 		ProfileArn: profileArn,
 	}, nil
+}
+
+func prependSystemPrompt(history []kiro.HistoryItem, current *kiro.CurrentMessage, systemPrompt string) {
+	if systemPrompt == "" {
+		return
+	}
+	for i := range history {
+		if history[i].UserInputMessage != nil {
+			original := history[i].UserInputMessage.Content
+			if original == "" {
+				history[i].UserInputMessage.Content = systemPrompt
+			} else {
+				history[i].UserInputMessage.Content = systemPrompt + "\n\n" + original
+			}
+			return
+		}
+	}
+	original := current.UserInputMessage.Content
+	if original == "" {
+		current.UserInputMessage.Content = systemPrompt
+	} else {
+		current.UserInputMessage.Content = systemPrompt + "\n\n" + original
+	}
 }
 
 func lastUserMessageIndex(messages []NormalizedMessage) int {
