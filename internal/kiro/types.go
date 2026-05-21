@@ -44,8 +44,8 @@ func MapModel(input string) string {
 func normalizeModelInput(input string) string {
 	s := strings.ToLower(strings.TrimSpace(input))
 
-	for _, prefix := range []string{"kiro/", "anthropic/", "openai/", "claude/", "aws/"} {
-		s = strings.TrimPrefix(s, prefix)
+	if idx := strings.LastIndex(s, "/"); idx >= 0 {
+		s = s[idx+1:]
 	}
 
 	s = strings.ReplaceAll(s, "_", "-")
