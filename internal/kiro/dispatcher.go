@@ -78,6 +78,12 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 	}
 	cfg := d.currentConfig()
 	d.applyModelMapping(ctx, payload)
+	toolMapper := NewToolNameMapper()
+	NormalizeToolSchemas(payload)
+	toolMapper.ShortenNames(payload)
+	if err := GuardPayloadSize(payload); err != nil {
+		return nil, nil, errs.Wrap(err, errs.ClassContentTooLong, err.Error())
+	}
 	hint.Model = payload.ConversationState.CurrentMessage.UserInputMessage.ModelID
 	requestPayload, err := json.Marshal(payload)
 	if err != nil {
@@ -149,7 +155,9 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 			classified := classifyError(err)
 			lastErr = classified
 			if isRecoverable(classified) {
-				releaseFailure(acq, failureReason(classified))
+				if errs.ClassOf(classified) != errs.ClassNetwork {
+					releaseFailure(acq, failureReason(classified))
+				}
 				hint.ExcludeIDs = appendExcluded(hint.ExcludeIDs, acq.Account.ID)
 				if err := dispatcherBackoff(ctx, cfg, attempt); err != nil {
 					return nil, nil, err
@@ -169,7 +177,7 @@ func (d *Dispatcher) Stream(ctx context.Context, payload *KiroPayload, hint acco
 			continue
 		}
 
-		return d.forwardStream(ctx, acq, body, requestPayload), meta, nil
+		return d.forwardStream(ctx, acq, body, requestPayload, toolMapper), meta, nil
 	}
 
 	msg := "all Kiro accounts failed"
@@ -235,6 +243,12 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 		return FullResponse{}, errs.New(errs.ClassFatal, "MISSING_ACCOUNT", "missing Kiro account")
 	}
 	d.applyModelMapping(ctx, payload)
+	toolMapper := NewToolNameMapper()
+	NormalizeToolSchemas(payload)
+	toolMapper.ShortenNames(payload)
+	if err := GuardPayloadSize(payload); err != nil {
+		return FullResponse{}, errs.Wrap(err, errs.ClassContentTooLong, err.Error())
+	}
 	requestPayload, err := json.Marshal(payload)
 	if err != nil {
 		return FullResponse{}, errs.Wrap(err, errs.ClassFatal, "failed to marshal Kiro payload")
@@ -262,7 +276,9 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 			_ = body.Close()
 		}
 		classified := classifyError(err)
-		releaseFailure(acq, failureReason(classified))
+		if errs.ClassOf(classified) != errs.ClassNetwork {
+			releaseFailure(acq, failureReason(classified))
+		}
 		return FullResponse{}, classified
 	}
 	if body == nil {
@@ -271,7 +287,7 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 		return FullResponse{}, err
 	}
 
-	events := d.forwardStream(ctx, acq, body, requestPayload)
+	events := d.forwardStream(ctx, acq, body, requestPayload, toolMapper)
 	full := FullResponse{AccountID: acq.Account.ID, AccountLabel: acq.Account.Label}
 	toolIndex := map[string]int{}
 	for event := range events {
@@ -336,7 +352,7 @@ func (d *Dispatcher) applyModelMapping(ctx context.Context, payload *KiroPayload
 	}
 }
 
-func (d *Dispatcher) forwardStream(ctx context.Context, acq *account.Acquisition, body io.ReadCloser, payload []byte) <-chan StreamEvent {
+func (d *Dispatcher) forwardStream(ctx context.Context, acq *account.Acquisition, body io.ReadCloser, payload []byte, toolMapper *ToolNameMapper) <-chan StreamEvent {
 	out := make(chan StreamEvent, streamChannelCapacity)
 	decoder := NewStreamDecoder(d.logger)
 	decoded := decoder.Decode(ctx, body, payload)
@@ -346,6 +362,10 @@ func (d *Dispatcher) forwardStream(ctx context.Context, acq *account.Acquisition
 		for event := range decoded {
 			if _, ok := event.(ErrorEvent); ok {
 				failed = true
+			}
+			if start, ok := event.(ToolUseStart); ok {
+				start.Name = toolMapper.RestoreName(start.Name)
+				event = start
 			}
 			select {
 			case out <- event:
@@ -386,6 +406,9 @@ func buildKiroRequest(acc *account.Account, payload []byte, token, region string
 		requestPayload.ProfileArn = strings.TrimSpace(*acc.ProfileARN)
 	} else if strings.EqualFold(acc.AuthMethod, "social") && requestPayload.ProfileArn == "" {
 		requestPayload.ProfileArn = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK"
+	}
+	if err := GuardPayloadSize(&requestPayload); err != nil {
+		return nil, errs.Wrap(err, errs.ClassContentTooLong, err.Error())
 	}
 	var err error
 	payload, err = json.Marshal(requestPayload)

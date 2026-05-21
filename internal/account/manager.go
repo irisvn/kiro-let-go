@@ -110,6 +110,9 @@ func (m *Manager) Acquire(ctx context.Context, hint SelectionHint) (*Acquisition
 		return nil, err
 	}
 	candidates := m.filterCandidates(ctx, accounts, hint)
+	if len(candidates) == 0 && m.tryAutoRecovery(ctx) {
+		candidates = m.filterCandidates(ctx, accounts, hint)
+	}
 	if len(candidates) == 0 {
 		return nil, ErrNoCandidates
 	}
@@ -224,6 +227,38 @@ func (m *Manager) filterCandidates(ctx context.Context, accounts []Account, hint
 		candidates = append(candidates, &acc)
 	}
 	return candidates
+}
+
+func (m *Manager) tryAutoRecovery(ctx context.Context) bool {
+	if m == nil || m.store == nil || m.circuit == nil {
+		return false
+	}
+	accounts, err := m.store.List(ctx, ListFilter{EnabledOnly: true})
+	if err != nil || len(accounts) == 0 {
+		return false
+	}
+
+	snapshot := m.circuit.Snapshot()
+	allBlocked := true
+	for _, acc := range accounts {
+		info, ok := snapshot[acc.ID]
+		if !ok || !info.Open {
+			allBlocked = false
+			break
+		}
+	}
+	if !allBlocked {
+		return false
+	}
+
+	m.logger.Warn("all accounts blocked by circuit breaker, performing auto-recovery")
+	for _, acc := range accounts {
+		m.circuit.Reset(acc.ID)
+		if err := m.store.RecordSuccess(ctx, acc.ID); err != nil {
+			m.logger.Warn("failed to reset account failure count during auto-recovery", "account_id", acc.ID, "error", err)
+		}
+	}
+	return true
 }
 
 func (m *Manager) stickyCandidate(candidates []*Account, hint SelectionHint) *Account {
