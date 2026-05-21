@@ -39,12 +39,10 @@ func NormalizedToKiro(req *NormalizedRequest, profileArn string) (*kiro.KiroPayl
 
 	return &kiro.KiroPayload{
 		ConversationState: kiro.ConversationState{
-			ConversationID:      uuid.NewString(),
-			AgentContinuationID: uuid.NewString(),
-			AgentTaskType:       "vibe",
-			ChatTriggerType:     "MANUAL",
-			CurrentMessage:      cleanCurrent,
-			History:             cleanHistory,
+			ConversationID:  uuid.NewString(),
+			ChatTriggerType: "MANUAL",
+			CurrentMessage:  cleanCurrent,
+			History:         cleanHistory,
 		},
 		ProfileArn: profileArn,
 	}, nil
@@ -127,7 +125,7 @@ func buildToolResultUserInput(msg NormalizedMessage) *kiro.UserInputMessage {
 	if len(results) == 0 {
 		return nil
 	}
-	return &kiro.UserInputMessage{UserInputMessageContext: &kiro.UserInputMessageContext{ToolResults: results}}
+	return &kiro.UserInputMessage{Content: "", UserInputMessageContext: &kiro.UserInputMessageContext{ToolResults: results}}
 }
 
 func buildAssistantResponse(msg NormalizedMessage) *kiro.AssistantResponseMessage {
@@ -138,13 +136,15 @@ func buildAssistantResponse(msg NormalizedMessage) *kiro.AssistantResponseMessag
 		case Text:
 			text.WriteString(p.Text)
 		case ToolUse:
-			toolUses = append(toolUses, kiro.ToolUseEntry{ToolUseID: p.ID, Name: p.Name, Input: p.InputJSON})
+			input := json.RawMessage(p.InputJSON)
+			toolUses = append(toolUses, kiro.ToolUseEntry{ToolUseID: p.ID, Name: p.Name, Input: input})
 		}
 	}
 	if text.Len() == 0 && len(toolUses) == 0 {
 		return nil
 	}
-	return &kiro.AssistantResponseMessage{Content: text.String(), ToolUses: toolUses}
+	content := text.String()
+	return &kiro.AssistantResponseMessage{Content: content, ToolUses: toolUses}
 }
 
 func buildCurrentKiroMessage(req *NormalizedRequest, msg NormalizedMessage, model string) (kiro.CurrentMessage, error) {
@@ -268,10 +268,18 @@ func validatePairing(history []kiro.HistoryItem, current kiro.CurrentMessage) ([
 		if item.AssistantResponseMessage != nil {
 			assistant := *item.AssistantResponseMessage
 			assistant.ToolUses = filterToolUses(assistant.ToolUses, drop)
-			if assistant.Content == "" && len(assistant.ToolUses) == 0 {
+			// Skip if content is empty or just a placeholder, and there are no tool uses
+			if (assistant.Content == "" || assistant.Content == "(empty placeholder)") && len(assistant.ToolUses) == 0 {
 				continue
 			}
-			clean.AssistantResponseMessage = &assistant
+			// Ensure empty content has placeholder
+			if assistant.Content == "" {
+				assistant.Content = "(empty placeholder)"
+			}
+			clean.AssistantResponseMessage = &kiro.AssistantResponseMessage{
+				Content:  assistant.Content,
+				ToolUses: append([]kiro.ToolUseEntry(nil), assistant.ToolUses...),
+			}
 		}
 		if item.UserInputMessage != nil {
 			user := cloneUserInputMessage(*item.UserInputMessage)
@@ -284,7 +292,16 @@ func validatePairing(history []kiro.HistoryItem, current kiro.CurrentMessage) ([
 			if user.Content == "" && len(user.Images) == 0 && user.UserInputMessageContext == nil {
 				continue
 			}
-			clean.UserInputMessage = &user
+			if user.Content == "" {
+				user.Content = "(empty placeholder)"
+			}
+			clean.UserInputMessage = &kiro.UserInputMessage{
+				Content:                 user.Content,
+				ModelID:                 user.ModelID,
+				Origin:                  user.Origin,
+				UserInputMessageContext: user.UserInputMessageContext,
+				Images:                  append([]kiro.ImagePart(nil), user.Images...),
+			}
 		}
 		cleanHistory = append(cleanHistory, clean)
 	}

@@ -13,7 +13,7 @@ const (
 	requestLogKeyInputTokens  = "rl_input_tokens"
 	requestLogKeyOutputTokens = "rl_output_tokens"
 	requestLogKeyKiroPayload  = "rl_kiro_payload"
-	requestLogPayloadLimit    = 500
+	requestLogPayloadLimit    = 50000 // Tăng từ 5000 lên 50000
 )
 
 func setRequestLogAccount(c *gin.Context, accountID, accountLabel string) {

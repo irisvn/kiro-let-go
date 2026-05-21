@@ -50,7 +50,8 @@ func New(deps Deps) *Server {
 
 	requestLog := deps.RequestLog
 	if requestLog == nil {
-		requestLog = NewRequestLog(100)
+		requestLog = NewRequestLogWithFile(100, deps.Cfg.Logging.RequestLogFile)
+		_ = requestLog.LoadFromFile()
 	}
 
 	r.Use(

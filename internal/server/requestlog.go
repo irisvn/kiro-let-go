@@ -1,10 +1,13 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -26,12 +29,14 @@ const (
 	CtxKeyKiroPayload  = "rl_kiro_payload"
 )
 
-const requestLogSnippetLimit = 2048
+const requestLogSnippetLimit = 100 * 1024 // 100KB cho file log
 
 type RequestLog struct {
-	mu      sync.RWMutex
-	entries []RequestLogEntry
-	maxSize int
+	mu       sync.RWMutex
+	entries  []RequestLogEntry
+	maxSize  int
+	filePath string
+	fileMu   sync.Mutex
 }
 
 func NewRequestLog(maxSize int) *RequestLog {
@@ -41,18 +46,36 @@ func NewRequestLog(maxSize int) *RequestLog {
 	return &RequestLog{maxSize: maxSize}
 }
 
+func NewRequestLogWithFile(maxSize int, filePath string) *RequestLog {
+	rl := NewRequestLog(maxSize)
+	if filePath != "" {
+		rl.filePath = filePath
+		// Ensure parent directory exists
+		if dir := filepath.Dir(filePath); dir != "" {
+			_ = os.MkdirAll(dir, 0755)
+		}
+	}
+	return rl
+}
+
 func (rl *RequestLog) Add(entry RequestLogEntry) {
 	if rl == nil {
 		return
 	}
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
 	if entry.ID == "" {
 		entry.ID = uuid.NewString()
 	}
 	if entry.Timestamp.IsZero() {
 		entry.Timestamp = time.Now().UTC()
 	}
+
+	// Write to file first (before locking, since fileMu is separate)
+	if rl.filePath != "" {
+		rl.appendToFile(entry)
+	}
+
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
 	if rl.maxSize <= 0 {
 		rl.maxSize = 100
 	}
@@ -62,6 +85,66 @@ func (rl *RequestLog) Add(entry RequestLogEntry) {
 		return
 	}
 	rl.entries = append(rl.entries, entry)
+}
+
+func (rl *RequestLog) appendToFile(entry RequestLogEntry) {
+	rl.fileMu.Lock()
+	defer rl.fileMu.Unlock()
+
+	f, err := os.OpenFile(rl.filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	line, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(line)
+	_, _ = f.Write([]byte("\n"))
+}
+
+func (rl *RequestLog) LoadFromFile() error {
+	if rl == nil || rl.filePath == "" {
+		return nil
+	}
+
+	f, err := os.Open(rl.filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer f.Close()
+
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	scanner := bufio.NewScanner(f)
+	// Increase scanner buffer for long lines
+	const maxCapacity = 1024 * 1024 // 1MB
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var entry RequestLogEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue
+		}
+		rl.entries = append(rl.entries, entry)
+	}
+
+	// Trim to maxSize
+	if len(rl.entries) > rl.maxSize {
+		rl.entries = rl.entries[len(rl.entries)-rl.maxSize:]
+	}
+	return scanner.Err()
 }
 
 func (rl *RequestLog) Entries() []RequestLogEntry {
@@ -84,6 +167,11 @@ func (rl *RequestLog) Clear() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	rl.entries = nil
+	if rl.filePath != "" {
+		rl.fileMu.Lock()
+		defer rl.fileMu.Unlock()
+		_ = os.Remove(rl.filePath)
+	}
 }
 
 func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
@@ -108,6 +196,7 @@ func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
 		}
 		entry := RequestLogEntry{
 			ID:              uuid.NewString(),
+			RequestID:       getStringFromContext(c, "request_id"),
 			Timestamp:       time.Now().UTC(),
 			Method:          c.Request.Method,
 			Path:            c.Request.URL.Path,

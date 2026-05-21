@@ -52,10 +52,14 @@
     },
     "history": [
       {
-        "content": "Hi"
+        "userInputMessage": {
+          "content": "Hi"
+        }
       },
       {
-        "content": "Hello!"
+        "assistantResponseMessage": {
+          "content": "Hello!"
+        }
       }
     ]
   },

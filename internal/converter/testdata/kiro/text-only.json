@@ -1,24 +1,27 @@
 {
   "conversationState": {
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
-    "agentTaskType": "vibe",
     "chatTriggerType": "MANUAL",
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "Tell me a joke",
-          "modelId": "sonnet",
+        "modelId": "sonnet",
         "origin": "AI_EDITOR"
       }
     },
     "history": [
       {
-        "content": "Hi",
-            "modelId": "sonnet",
-        "origin": "AI_EDITOR"
+        "userInputMessage": {
+          "content": "Hi",
+          "modelId": "sonnet",
+          "origin": "AI_EDITOR"
+        }
       },
       {
-        "content": "Hello"
+        "assistantResponseMessage": {
+          "content": "Hello"
+        }
       }
     ]
   },

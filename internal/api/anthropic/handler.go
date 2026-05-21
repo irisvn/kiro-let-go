@@ -790,7 +790,7 @@ func handlerBuildAssistantResponse(msg handlerNormalizedMessage) *kiro.Assistant
 		case handlerText:
 			text.WriteString(p.Text)
 		case handlerToolUse:
-			toolUses = append(toolUses, kiro.ToolUseEntry{ToolUseID: p.ID, Name: p.Name, Input: p.InputJSON})
+			toolUses = append(toolUses, kiro.ToolUseEntry{ToolUseID: p.ID, Name: p.Name, Input: json.RawMessage(p.InputJSON)})
 		}
 	}
 	if text.Len() == 0 && len(toolUses) == 0 {
@@ -985,8 +985,8 @@ func buildResponseContent(full kiro.FullResponse) []ContentBlock {
 		content = append(content, TextBlock{Type: "text", Text: full.Text})
 	}
 	for _, tool := range full.ToolUses {
-		input := json.RawMessage(tool.Input)
-		if len(strings.TrimSpace(tool.Input)) == 0 {
+		input := tool.Input
+		if len(strings.TrimSpace(string(tool.Input))) == 0 {
 			input = json.RawMessage(`{}`)
 		}
 		if !json.Valid(input) {

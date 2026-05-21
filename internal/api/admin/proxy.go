@@ -15,6 +15,7 @@ import (
 
 type RequestLogEntry struct {
 	ID              string    `json:"id"`
+	RequestID       string    `json:"request_id,omitempty"`
 	Timestamp       time.Time `json:"timestamp"`
 	Method          string    `json:"method"`
 	Path            string    `json:"path"`
@@ -168,7 +169,23 @@ func (h *Handler) getProxyLog(c *gin.Context) {
 	if len(entries) > limit {
 		entries = entries[:limit]
 	}
+	
+	// Truncate large fields for API response to keep UI lightweight
+	const apiResponseLimit = 2000
+	for i := range entries {
+		entries[i].RequestBody = truncateForAPI(entries[i].RequestBody, apiResponseLimit)
+		entries[i].ResponseSnippet = truncateForAPI(entries[i].ResponseSnippet, apiResponseLimit)
+		entries[i].KiroPayload = truncateForAPI(entries[i].KiroPayload, apiResponseLimit)
+	}
+	
 	c.JSON(http.StatusOK, entries)
+}
+
+func truncateForAPI(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	return s[:limit] + "…"
 }
 
 type apiTestRequest struct {

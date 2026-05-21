@@ -52,7 +52,7 @@ func TestHandlerNonStreamingResponse(t *testing.T) {
 			return kiro.FullResponse{
 				Text:       "hello",
 				Thinking:   "considering options",
-				ToolUses:   []kiro.ToolUseEntry{{ToolUseID: "tool-1", Name: "lookup", Input: `{"city":"Paris"}`}},
+				ToolUses:   []kiro.ToolUseEntry{{ToolUseID: "tool-1", Name: "lookup", Input: json.RawMessage(`{"city":"Paris"}`)}},
 				Usage:      kiro.Usage{InputTokens: 11, OutputTokens: 7},
 				StopReason: "tool_use",
 			}, nil

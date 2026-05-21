@@ -51,8 +51,9 @@ type FailoverConfig struct {
 
 // LoggingConfig holds logging settings.
 type LoggingConfig struct {
-	Level  string `mapstructure:"level"`
-	Format string `mapstructure:"format"`
+	Level         string `mapstructure:"level"`
+	Format        string `mapstructure:"format"`
+	RequestLogFile string `mapstructure:"request_log_file"`
 }
 
 // ModelMappingRule maps incoming model names to one or more Kiro model names.

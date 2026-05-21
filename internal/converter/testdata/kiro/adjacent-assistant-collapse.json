@@ -1,55 +1,60 @@
 {
   "conversationState": {
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
-    "agentTaskType": "vibe",
     "chatTriggerType": "MANUAL",
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "continue",
-          "modelId": "haiku",
+        "modelId": "haiku",
         "origin": "AI_EDITOR"
       }
     },
     "history": [
       {
-        "content": "FirstSecond",
-        "toolUses": [
-          {
-            "toolUseId": "call_a",
-            "name": "a",
-            "input": "{}"
-          },
-          {
-            "toolUseId": "call_b",
-            "name": "b",
-            "input": "{\"x\":1}"
-          }
-        ]
-      },
-      {
-        "content": "",
-        "userInputMessageContext": {
-          "toolResults": [
+        "assistantResponseMessage": {
+          "content": "FirstSecond",
+          "toolUses": [
             {
-              "toolUseId": "call_a",
-              "content": [
-                {
-                  "text": "A"
-                }
-              ],
-              "status": "success"
+              "input": {},
+              "name": "a",
+              "toolUseId": "call_a"
             },
             {
-              "toolUseId": "call_b",
-              "content": [
-                {
-                  "text": "B"
-                }
-              ],
-              "status": "success"
+              "input": {
+                "x": 1
+              },
+              "name": "b",
+              "toolUseId": "call_b"
             }
           ]
+        }
+      },
+      {
+        "userInputMessage": {
+          "content": "",
+          "userInputMessageContext": {
+            "toolResults": [
+              {
+                "content": [
+                  {
+                    "text": "A"
+                  }
+                ],
+                "status": "success",
+                "toolUseId": "call_a"
+              },
+              {
+                "content": [
+                  {
+                    "text": "B"
+                  }
+                ],
+                "status": "success",
+                "toolUseId": "call_b"
+              }
+            ]
+          }
         }
       }
     ]

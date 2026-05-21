@@ -24,7 +24,7 @@ func TestHandlerPostMessages_NonStreaming(t *testing.T) {
 		return kiro.FullResponse{
 			Thinking:   "plan",
 			Text:       "hello world",
-			ToolUses:   []kiro.ToolUseEntry{{ToolUseID: "toolu_01", Name: "lookup", Input: `{"q":"golang"}`}},
+			ToolUses:   []kiro.ToolUseEntry{{ToolUseID: "toolu_01", Name: "lookup", Input: json.RawMessage(`{"q":"golang"}`)}},
 			Usage:      kiro.Usage{OutputTokens: 9},
 			StopReason: "end_turn",
 		}, nil

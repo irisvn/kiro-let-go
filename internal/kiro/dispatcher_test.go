@@ -120,7 +120,7 @@ func TestDispatcherOnceCollectsFullResponse(t *testing.T) {
 	require.Len(t, full.ToolUses, 1)
 	assert.Equal(t, "tool-1", full.ToolUses[0].ToolUseID)
 	assert.Equal(t, "shell", full.ToolUses[0].Name)
-	assert.Equal(t, "x", full.ToolUses[0].Input)
+	assert.Equal(t, "x", string(full.ToolUses[0].Input))
 }
 
 func TestDispatcherAllAttemptsExhausted(t *testing.T) {

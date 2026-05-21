@@ -215,7 +215,7 @@ func (d *Dispatcher) Once(ctx context.Context, payload *KiroPayload, hint accoun
 				toolIndex[e.ID] = idx
 				full.ToolUses = append(full.ToolUses, ToolUseEntry{ToolUseID: e.ID})
 			}
-			full.ToolUses[idx].Input += e.InputDelta
+			full.ToolUses[idx].Input = append(full.ToolUses[idx].Input, e.InputDelta...)
 		case Usage:
 			full.Usage = e
 		case ContextUsage:
@@ -306,7 +306,7 @@ func (d *Dispatcher) TestWithAccount(ctx context.Context, acc *account.Account, 
 				toolIndex[e.ID] = idx
 				full.ToolUses = append(full.ToolUses, ToolUseEntry{ToolUseID: e.ID})
 			}
-			full.ToolUses[idx].Input += e.InputDelta
+			full.ToolUses[idx].Input = append(full.ToolUses[idx].Input, e.InputDelta...)
 		case Usage:
 			full.Usage = e
 		case ContextUsage:
@@ -347,7 +347,9 @@ func (d *Dispatcher) applyModelMapping(ctx context.Context, payload *KiroPayload
 	payload.ConversationState.CurrentMessage.UserInputMessage.ModelID = current
 	for i := range payload.ConversationState.History {
 		if msg := payload.ConversationState.History[i].UserInputMessage; msg != nil {
-			msg.ModelID = current
+			if msg.Content != "" && msg.Content != "(empty placeholder)" {
+				msg.ModelID = current
+			}
 		}
 	}
 }
@@ -488,6 +490,7 @@ func classifyResponse(resp *http.Response, fallback error) error {
 	}
 	if resp != nil {
 		if classified := errs.FromKiroResponse(resp.StatusCode, body); classified != nil {
+			slog.Warn("kiro non-200 response", "status_code", resp.StatusCode, "body", string(body), "classified", classified.Message)
 			return classified
 		}
 	}

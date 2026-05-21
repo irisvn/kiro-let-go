@@ -1,41 +1,44 @@
 {
   "conversationState": {
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
-    "agentTaskType": "vibe",
     "chatTriggerType": "MANUAL",
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "done?",
-          "modelId": "sonnet-4.6",
+        "modelId": "sonnet-4.6",
         "origin": "AI_EDITOR"
       }
     },
     "history": [
       {
-        "content": "",
-        "toolUses": [
-          {
-            "toolUseId": "paired",
-            "name": "ok",
-            "input": "{}"
-          }
-        ]
-      },
-      {
-        "content": "",
-        "userInputMessageContext": {
-          "toolResults": [
+        "assistantResponseMessage": {
+          "content": "(empty placeholder)",
+          "toolUses": [
             {
-              "toolUseId": "paired",
-              "content": [
-                {
-                  "text": "ok"
-                }
-              ],
-              "status": "success"
+              "input": {},
+              "name": "ok",
+              "toolUseId": "paired"
             }
           ]
+        }
+      },
+      {
+        "userInputMessage": {
+          "content": "(empty placeholder)",
+          "userInputMessageContext": {
+            "toolResults": [
+              {
+                "content": [
+                  {
+                    "text": "ok"
+                  }
+                ],
+                "status": "success",
+                "toolUseId": "paired"
+              }
+            ]
+          }
         }
       }
     ]

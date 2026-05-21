@@ -197,7 +197,7 @@ func handleOnce(c *gin.Context, dispatcher chatDispatcher, req *ChatCompletionRe
 			Type: "function",
 			Function: ToolCallFunction{
 				Name:      toolUse.Name,
-				Arguments: toolUse.Input,
+				Arguments: string(toolUse.Input),
 			},
 		})
 	}

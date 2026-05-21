@@ -138,10 +138,10 @@ type HistoryItem struct {
 
 func (h HistoryItem) MarshalJSON() ([]byte, error) {
 	if h.UserInputMessage != nil {
-		return json.Marshal(h.UserInputMessage)
+		return json.Marshal(map[string]any{"userInputMessage": h.UserInputMessage})
 	}
 	if h.AssistantResponseMessage != nil {
-		return json.Marshal(h.AssistantResponseMessage)
+		return json.Marshal(map[string]any{"assistantResponseMessage": h.AssistantResponseMessage})
 	}
 	return []byte("null"), nil
 }
@@ -152,9 +152,9 @@ type AssistantResponseMessage struct {
 }
 
 type ToolUseEntry struct {
-	ToolUseID string `json:"toolUseId"`
-	Name      string `json:"name"`
-	Input     string `json:"input,omitempty"`
+	ToolUseID string          `json:"toolUseId"`
+	Name      string          `json:"name"`
+	Input     json.RawMessage `json:"input,omitempty"`
 }
 
 type ImagePart struct {

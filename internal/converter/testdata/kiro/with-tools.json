@@ -1,31 +1,32 @@
 {
   "conversationState": {
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
-    "agentTaskType": "vibe",
     "chatTriggerType": "MANUAL",
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "Thanks",
-          "modelId": "opus-4.7",
+        "modelId": "opus-4.7",
         "origin": "AI_EDITOR",
         "userInputMessageContext": {
           "tools": [
             {
               "toolSpecification": {
-                "name": "get_weather",
                 "description": "Get current weather",
                 "inputSchema": {
                   "json": {
-                    "type": "object",
                     "properties": {
                       "location": {
                         "type": "string"
                       }
                     },
-                    "required": ["location"]
+                    "required": [
+                      "location"
+                    ],
+                    "type": "object"
                   }
-                }
+                },
+                "name": "get_weather"
               }
             }
           ]
@@ -34,34 +35,42 @@
     },
     "history": [
       {
-        "content": "Weather?",
-            "modelId": "opus-4.7",
-        "origin": "AI_EDITOR"
+        "userInputMessage": {
+          "content": "Weather?",
+          "modelId": "opus-4.7",
+          "origin": "AI_EDITOR"
+        }
       },
       {
-        "content": "Checking",
-        "toolUses": [
-          {
-            "toolUseId": "call_1",
-            "name": "get_weather",
-            "input": "{\"location\":\"Paris\"}"
-          }
-        ]
-      },
-      {
-        "content": "",
-        "userInputMessageContext": {
-          "toolResults": [
+        "assistantResponseMessage": {
+          "content": "Checking",
+          "toolUses": [
             {
-              "toolUseId": "call_1",
-              "content": [
-                {
-                  "text": "18C"
-                }
-              ],
-              "status": "success"
+              "input": {
+                "location": "Paris"
+              },
+              "name": "get_weather",
+              "toolUseId": "call_1"
             }
           ]
+        }
+      },
+      {
+        "userInputMessage": {
+          "content": "",
+          "userInputMessageContext": {
+            "toolResults": [
+              {
+                "content": [
+                  {
+                    "text": "18C"
+                  }
+                ],
+                "status": "success",
+                "toolUseId": "call_1"
+              }
+            ]
+          }
         }
       }
     ]

@@ -138,14 +138,14 @@ func TestHistoryItemMarshalJSON(t *testing.T) {
 		h := HistoryItem{UserInputMessage: &UserInputMessage{Content: "user msg"}}
 		b, err := json.Marshal(h)
 		require.NoError(t, err)
-		assert.JSONEq(t, `{"content":"user msg"}`, string(b))
+		assert.JSONEq(t, `{"userInputMessage":{"content":"user msg"}}`, string(b))
 	})
 
 	t.Run("assistant", func(t *testing.T) {
 		h := HistoryItem{AssistantResponseMessage: &AssistantResponseMessage{Content: "assistant msg"}}
 		b, err := json.Marshal(h)
 		require.NoError(t, err)
-		assert.JSONEq(t, `{"content":"assistant msg"}`, string(b))
+		assert.JSONEq(t, `{"assistantResponseMessage":{"content":"assistant msg"}}`, string(b))
 	})
 
 	t.Run("empty", func(t *testing.T) {
