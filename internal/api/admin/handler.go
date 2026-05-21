@@ -636,6 +636,13 @@ func (h *Handler) getAccountQuota(c *gin.Context) {
 		return
 	}
 
+	if force {
+		acc, ok = h.ensureFreshToken(c, acc)
+		if !ok {
+			return
+		}
+	}
+
 	quota, err := h.quota.Get(c.Request.Context(), acc, force)
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "internal_error", fmt.Sprintf("get quota: %v", err))
