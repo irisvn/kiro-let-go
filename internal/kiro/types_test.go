@@ -36,6 +36,23 @@ func TestMapModel(t *testing.T) {
 		{"haiku-4.5", ModelClaudeHaiku45},
 		{"claude-haiku-4.5", ModelClaudeHaiku45},
 		{"unknown-model", "unknown-model"},
+		// Prefix stripping
+		{"kiro/claude-sonnet-4.6", ModelClaudeSonnet46},
+		{"anthropic/claude-sonnet-4.6", ModelClaudeSonnet46},
+		{"openai/claude-opus-4.7", ModelClaudeOpus47},
+		{"aws/claude-haiku-4.5", ModelClaudeHaiku45},
+		// Version separator normalization
+		{"claude-sonnet-4-6", ModelClaudeSonnet46},
+		{"claude-opus-4-7", ModelClaudeOpus47},
+		{"claude-haiku-4-5", ModelClaudeHaiku45},
+		// Case insensitive
+		{"CLAUDE-SONNET-4.6", ModelClaudeSonnet46},
+		{"Claude-Opus-4.7", ModelClaudeOpus47},
+		// Underscore normalization
+		{"claude_sonnet_4.5", ModelClaudeSonnet45},
+		// Combined: prefix + separator + case
+		{"Kiro/Claude-Sonnet-4-6", ModelClaudeSonnet46},
+		{"ANTHROPIC/CLAUDE-OPUS-4-7", ModelClaudeOpus47},
 	}
 
 	for _, tt := range tests {
