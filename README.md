@@ -1,48 +1,60 @@
 # kiro-let-go
 
-## What is this?
+## Đây là gì?
 
-A Go-based gateway proxy that fronts multiple Kiro AI accounts, exposing OpenAI- and Anthropic-compatible APIs with multi-account failover, anti-ban protections, and quota inspection. It load-balances requests across accounts, recovers from failures automatically, and resists Kiro's ban-detection mechanisms — so you can drop it into existing clients without changing code.
+Một cổng kết nối (gateway proxy) viết bằng Go đóng vai trò là proxy đứng trước nhiều tài khoản Kiro AI. Nó cung cấp các API tương thích hoàn toàn với định dạng của OpenAI và Anthropic. Hệ thống hỗ trợ tự động failover (chuyển đổi dự phòng khi tài khoản lỗi), các cơ chế bảo vệ chống khóa tài khoản (anti-ban), tự động kiểm tra quota và cung cấp giao diện quản trị Admin UI trực quan. 
 
-## Build
+Proxy này tự động cân bằng tải các request qua các tài khoản, tự động khôi phục khi gặp sự cố và giả lập lưu lượng giống như IDE thực tế để tránh cơ chế phát hiện ban của Kiro. Nhờ đó, bạn có thể tích hợp trực tiếp vào các client AI hiện tại (như OpenCode, Cursor, v.v.) mà không cần thay đổi mã nguồn.
+
+---
+
+## Biên dịch
+
+Chạy lệnh sau tại thư mục gốc để biên dịch dự án:
 
 ```bash
 make build
 ```
 
-This produces two binaries in `bin/`:
+Lệnh này sẽ tự động biên dịch bundle frontend React của Admin UI, nhúng vào mã nguồn Go và tạo ra hai tệp thực thi trong thư mục `bin/`:
 
-- `kiro-let-go` — the HTTP server
-- `kiro-let-go-cli` — the management CLI
+- `kiro-let-go` — HTTP Server (Proxy & Admin API/UI)
+- `kiro-let-go-cli` — Công cụ dòng lệnh CLI để quản trị hệ thống
 
-## Configure
+---
 
-1. Copy the example config and edit it:
+## Cấu hình ban đầu
+
+1. Sao chép tệp cấu hình mẫu và chỉnh sửa:
 
 ```bash
 cp configs/config.example.json configs/config.json
 ```
 
-2. Replace the placeholder API keys:
+2. Thay thế các khóa API mặc định:
 
-- `server.admin_api_key` — used to manage accounts via the REST admin API and CLI
-- `server.proxy_api_key` — used by clients when sending chat requests
+- `server.admin_api_key` — Khóa dùng để quản trị tài khoản qua REST API và CLI
+- `server.proxy_api_key` — Khóa API mà client sử dụng khi gửi chat request lên proxy
 
-3. (Optional) Set `storage.credentials_json_path` if you want to load accounts from a JSON file on disk. The server watches that file and syncs changes automatically.
+3. (Tùy chọn) Đặt cấu hình `storage.credentials_json_path` nếu bạn muốn tự động nạp tài khoản từ một tệp JSON trên đĩa. Máy chủ sẽ giám sát tệp đó và tự động đồng bộ hóa các thay đổi.
 
-## Add an account
+---
 
-You need at least one account before the proxy can handle requests. There are three ways to add one.
+## Thêm tài khoản Kiro
 
-### 1. CLI
+Bạn cần thêm ít nhất một tài khoản Kiro để proxy có thể xử lý các yêu cầu. Có ba cách để thêm tài khoản:
+
+### 1. Sử dụng công cụ CLI
 
 ```bash
+# Thêm tài khoản mạng xã hội (Social Auth)
 ./bin/kiro-let-go-cli account add \
   --type social \
   --label my-account \
   --refresh-token "<your-refresh-token>" \
   --region us-east-1
 
+# Thêm tài khoản sử dụng API Key
 ./bin/kiro-let-go-cli account add \
   --type apikey \
   --label my-apikey-account \
@@ -50,7 +62,7 @@ You need at least one account before the proxy can handle requests. There are th
   --region us-east-1
 ```
 
-### 2. REST API
+### 2. Sử dụng REST API
 
 ```bash
 curl -X POST http://localhost:8765/admin/accounts \
@@ -65,11 +77,11 @@ curl -X POST http://localhost:8765/admin/accounts \
   }'
 ```
 
-For API key auth, use `"auth_method": "apikey"` and `"api_key": "ksk_..."` instead of `refresh_token`.
+*(Đối với phương thức API Key, hãy đổi `"auth_method"` thành `"apikey"` và truyền `"api_key": "ksk_..."` thay vì `refresh_token`)*
 
-### 3. File
+### 3. Sử dụng tệp cấu hình JSON
 
-Create a credentials JSON file (e.g., `configs/credentials.json`) and point `storage.credentials_json_path` to it:
+Tạo một tệp cấu hình JSON chứa danh sách tài khoản (ví dụ: `configs/credentials.json`) và trỏ cấu hình `storage.credentials_json_path` tới tệp này:
 
 ```json
 [
@@ -78,13 +90,15 @@ Create a credentials JSON file (e.g., `configs/credentials.json`) and point `sto
 ]
 ```
 
-The server watches this file and syncs accounts automatically. You can also add `"_delete": true` to an entry to remove an account, or add a single `{"_remove_unlisted": true}` entry to delete any accounts not present in the file.
+Máy chủ sẽ giám sát tệp này và tự động đồng bộ hóa tài khoản. Bạn cũng có thể thêm thuộc tính `"_delete": true` vào một mục để xóa tài khoản đó, hoặc thêm một mục đặc biệt `{"_remove_unlisted": true}` để tự động xóa bất kỳ tài khoản nào trong hệ thống không có tên trong tệp này.
 
-## Use it
+---
 
-Point your OpenAI or Anthropic client at `http://localhost:8765` and use `REPLACE_ME_PROXY` as the API key.
+## Cách sử dụng
 
-### Anthropic-compatible endpoint
+Cấu hình cho ứng dụng của bạn (ví dụ OpenAI hoặc Anthropic SDK) trỏ endpoint về `http://localhost:8765` và sử dụng giá trị `server.proxy_api_key` của bạn làm API Key.
+
+### Endpoint tương thích Anthropic
 
 ```bash
 curl http://localhost:8765/v1/messages \
@@ -92,12 +106,12 @@ curl http://localhost:8765/v1/messages \
   -H "Content-Type: application/json" \
   -d '{
     "model": "claude-sonnet-4.6",
-    "messages": [{"role": "user", "content": "Hello"}],
+    "messages": [{"role": "user", "content": "Xin chào"}],
     "max_tokens": 1024
   }'
 ```
 
-### OpenAI-compatible endpoint
+### Endpoint tương thích OpenAI
 
 ```bash
 curl http://localhost:8765/v1/chat/completions \
@@ -105,81 +119,92 @@ curl http://localhost:8765/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "claude-sonnet-4.6",
-    "messages": [{"role": "user", "content": "Hello"}]
+    "messages": [{"role": "user", "content": "Xin chào"}]
   }'
 ```
 
-Supported models include `claude-sonnet-4.5`, `claude-sonnet-4.6`, `claude-opus-4.5`, `claude-opus-4.6`, `claude-opus-4.7`, and `claude-haiku-4.5`. You can also use the short aliases `sonnet`, `opus`, and `haiku`.
+> [!NOTE]
+> Các mô hình được hỗ trợ bao gồm `claude-sonnet-4.5`, `claude-sonnet-4.6`, `claude-opus-4.5`, `claude-opus-4.6`, `claude-opus-4.7`, và `claude-haiku-4.5`. Bạn cũng có thể sử dụng các tên gọi tắt: `sonnet`, `opus`, và `haiku`.
+> Chế độ stream (truyền tải dữ liệu thời gian thực) được hỗ trợ trên cả hai endpoint. Chỉ cần thêm `"stream": true` vào thân request.
 
-Streaming is supported on both endpoints. Add `"stream": true` to the request body.
+---
 
-## Check quota
+## Kiểm tra Quota
 
-### CLI
+### Qua công cụ CLI
 
 ```bash
-# Summary for all accounts
+# Xem tổng hợp hạn mức của tất cả các tài khoản
 ./bin/kiro-let-go-cli quota
 
-# Force a fresh fetch for one account
+# Bắt buộc cập nhật hạn mức trực tiếp cho một tài khoản cụ thể
 ./bin/kiro-let-go-cli quota <account-id> --force
 ```
 
-### REST API
+### Qua REST API
 
 ```bash
-# Summary for all accounts
+# Xem tổng hợp hạn mức của tất cả các tài khoản
 curl http://localhost:8765/admin/quota \
   -H "Authorization: Bearer REPLACE_ME_ADMIN"
 
-# Quota for a single account
+# Lấy hạn mức của một tài khoản cụ thể
 curl "http://localhost:8765/admin/accounts/<account-id>/quota?force=true" \
   -H "Authorization: Bearer REPLACE_ME_ADMIN"
 ```
 
-## Anti-ban notes
+---
 
-The proxy tries to keep accounts healthy by mimicking real Kiro IDE traffic:
+## Các tính năng nâng cao (Cấu hình động)
 
-- **Per-account machine IDs.** Each account gets a stable, deterministic machine ID derived from its label. Requests from different accounts look like they come from different machines.
-- **Deterministic headers.** Version strings, OS names, and user-agent values are chosen deterministically per account so the same account always sends the same fingerprint.
-- **Circuit breaker.** If an account starts failing repeatedly, it's temporarily taken out of rotation. A small probabilistic slice of requests retries the account to see if it recovered.
-- **Proxy isolation.** Each account can use its own HTTP or SOCKS5 proxy. The proxy creates a separate HTTP transport per account so connections don't mix.
-- **Sticky sessions.** When enabled, consecutive requests from the same conversation stick to the last successful account. This avoids switching identities mid-chat.
-- **Opus filtering.** Free-tier accounts are automatically excluded from Opus model requests because they can't run those models.
+Hệ thống tích hợp bảng cài đặt động trong Admin UI (`http://localhost:8765/admin/ui/settings`), cho phép thay đổi cấu hình nóng và áp dụng ngay lập tức mà không cần khởi động lại máy chủ:
 
-## Configuration reference
+* **Bật/Tắt Ghi Request Logs**:
+  Cho phép tắt hoàn toàn việc lưu trữ request logs vào bộ nhớ hoặc ghi xuống tệp `.data/request_log.jsonl`. Khi tắt, hệ thống sẽ thực sự bỏ qua tất cả logic của middleware log, giúp giải phóng hoàn toàn tài nguyên ổ đĩa và cải thiện hiệu năng xử lý.
+* **Extended Thinking (Giả lập Thinking Mode)**:
+  Bật chế độ giả lập suy nghĩ mở rộng (`<thinking>...</thinking>` tags) của AI trước khi trả lời, giúp mô phỏng trải nghiệm suy nghĩ sâu và cải thiện chất lượng phản hồi từ các dòng mô hình lớn.
+* **MCP Web Search**:
+  Cho phép AI tự động thực hiện tìm kiếm thông tin thời gian thực từ Internet thông qua các máy chủ MCP API đã được cấu hình.
+* **Truncation Recovery (Tự động phục hồi cắt ngắn)**:
+  Tự động phát hiện và cảnh báo khi phản hồi từ máy chủ upstream bị cắt ngắn do vượt quá giới hạn token đầu ra.
 
-| Section | Field | Default | Description |
+---
+
+## Chống khóa tài khoản (Anti-ban Notes)
+
+Để bảo vệ các tài khoản Kiro, hệ thống thực hiện giả lập hoàn hảo lưu lượng truy cập từ IDE chính thức:
+
+- **Mã máy riêng biệt cho từng tài khoản (Per-account Machine ID):** Mỗi tài khoản được cấp một ID máy cố định và duy nhất dựa trên nhãn (label). Upstream sẽ thấy các tài khoản như thể đang chạy từ các máy tính hoàn toàn khác nhau.
+- **Fingerprint nhất quán:** Các chuỗi phiên bản, hệ điều hành (OS), và User-Agent được chọn ngẫu nhiên nhưng nhất quán cho mỗi tài khoản, đảm bảo vân tay trình duyệt không bị thay đổi giữa các request.
+- **Cơ chế Circuit Breaker (Cầu dao tự động):** Nếu một tài khoản bị lỗi liên tục, nó sẽ tạm thời được đưa ra ngoài vòng xoay. Một tỷ lệ phần trăm request rất nhỏ sẽ được gửi thử nghiệm định kỳ để kiểm tra xem tài khoản đã tự phục hồi hay chưa.
+- **Cách ly Proxy (Proxy Isolation):** Mỗi tài khoản có thể định tuyến qua một HTTP hoặc SOCKS5 proxy riêng biệt, độc lập hoàn toàn các kết nối mạng.
+- **Sticky Sessions:** Khi được bật, các yêu cầu liên tiếp trong cùng một hội thoại (conversation) sẽ ưu tiên sử dụng cùng một tài khoản để tránh việc đổi danh tính liên tục trong một phiên chat.
+
+---
+
+## Tham chiếu cấu hình tĩnh (`configs/config.json`)
+
+| Phân vùng | Trường cấu hình | Mặc định | Mô tả |
 |---------|-------|---------|-------------|
-| `server` | `host` | `0.0.0.0` | Bind address for the HTTP server |
-| `server` | `port` | `8765` | Listen port |
-| `server` | `admin_api_key` | *(required)* | Bearer token for admin endpoints |
-| `server` | `proxy_api_key` | *(required)* | API key for client chat endpoints |
-| `kiro` | `region` | `us-east-1` | Default Kiro region |
-| `kiro` | `auth_region` | `us-east-1` | Region used for authentication requests |
-| `kiro` | `api_region` | `us-east-1` | Region used for API requests |
-| `storage` | `sqlite_path` | `.data/kiro.db` | Path to the SQLite database |
-| `storage` | `credentials_json_path` | ` ""` | Path to a JSON file the server watches for account changes |
-| `load_balancer` | `strategy` | `round_robin` | How to pick the next account. Only `round_robin` is supported |
-| `load_balancer` | `sticky_session` | `true` | Keep the same account for consecutive requests when possible |
-| `quota` | `cache_ttl_seconds` | `43200` | How long to cache quota data (12 hours) |
-| `failover` | `base_cooldown_sec` | `60` | Initial circuit-breaker cooldown after failures |
-| `failover` | `max_backoff_multiplier` | `1440` | Maximum backoff multiplier for circuit breaker |
-| `failover` | `probabilistic_retry_chance` | `0.10` | Chance (0-1) to retry a circuit-opened account |
-| `failover` | `max_attempts` | `9` | Max retry attempts per upstream request |
-| `logging` | `level` | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `logging` | `format` | `json` | Log format: `json` or `text` |
+| `server` | `host` | `0.0.0.0` | Địa chỉ bind cho HTTP server |
+| `server` | `port` | `8765` | Cổng lắng nghe |
+| `server` | `admin_api_key` | *(Bắt buộc)* | Token dùng cho các API quản trị và CLI |
+| `server` | `proxy_api_key` | *(Bắt buộc)* | API key mà client sử dụng để gửi chat |
+| `kiro` | `region` | `us-east-1` | Vùng Kiro mặc định |
+| `storage` | `sqlite_path` | `.data/kiro.db` | Đường dẫn lưu file cơ sở dữ liệu SQLite |
+| `storage` | `credentials_json_path` | ` ""` | Đường dẫn tệp JSON chứa tài khoản mà máy chủ giám sát |
+| `logging` | `level` | `info` | Cấp độ log của server: `debug`, `info`, `warn`, `error` |
+| `logging` | `format` | `json` | Định dạng log: `json` hoặc `text` |
 
-All settings can also be set via environment variables with the `KIRO_` prefix, using uppercase and underscores. For example, `KIRO_SERVER_PORT=8080` overrides `server.port`.
+*(Lưu ý: Tất cả các cài đặt tĩnh có thể được ghi đè bằng các biến môi trường có tiền tố `KIRO_`, ví dụ: `KIRO_SERVER_PORT=8080`)*
 
-## Limitations
+---
 
-These features are not supported:
+## Hạn chế hiện tại
 
-- **Non-Claude models.** Only Kiro's Claude-family models work. GPT, Gemini, and others are not available.
-- **HTTP image URLs.** Images must be sent as base64 data URLs. Remote HTTP/HTTPS image URLs are rejected.
-- **Multiple load-balancer strategies.** Only round-robin is implemented.
-- **Authentication methods other than social and apikey.** OAuth variants may be accepted as aliases, but they map to the same two backends.
-- **Real-time quota push updates.** Quota is polled on demand or cached; there is no webhook or push mechanism.
-- **Cross-account conversation history.** Each request is stateless from the proxy's perspective. Conversation state is managed by the client.
+Các tính năng sau hiện chưa được hỗ trợ:
+
+- **Các mô hình ngoài họ Claude:** Chỉ các mô hình thuộc dòng Claude của Kiro hoạt động. GPT, Gemini, v.v. không khả dụng.
+- **URL hình ảnh dạng HTTP/HTTPS:** Hình ảnh tải lên bắt buộc phải được mã hóa dưới dạng dữ liệu base64 URL. Các liên kết hình ảnh trực tiếp từ internet sẽ bị từ chối.
+- **Cơ chế đẩy cập nhật quota thời gian thực:** Quota chỉ được cập nhật định kỳ hoặc bắt buộc cập nhật thủ công; không có cơ chế Webhook hay Server-Sent Events tự động từ Kiro.
+- **Hội thoại xuyên suốt giữa các tài khoản:** Proxy hoàn toàn phi trạng thái (stateless). Trạng thái và lịch sử hội thoại phải được quản lý trực tiếp bởi client.
