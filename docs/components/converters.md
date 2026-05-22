@@ -175,9 +175,19 @@ Mỗi request được tạo:
 - `agentTaskType`: `"vibe"`
 - `chatTriggerType`: `"MANUAL"`
 
-### History split
+### Phân tách Lịch sử (History split)
 
-Tất cả messages trừ message user cuối cùng được đưa vào `history`. Message user cuối trở thành `currentMessage`.
+Để tương thích hoàn toàn với giao thức của Kiro (nơi request luôn kết thúc bằng một `CurrentMessage` đại diện cho lượt gửi hiện tại của client, và các lượt trước đó nằm trong `History`), converter thực hiện cơ chế phân tách thông minh dựa trên loại tin nhắn cuối cùng:
+
+1. **Nếu tin nhắn cuối cùng là `user`**:
+   - Tin nhắn `user` cuối cùng này sẽ được chọn làm `CurrentMessage`.
+   - Toàn bộ các tin nhắn trước đó được đưa vào `History`.
+
+2. **Nếu tin nhắn cuối cùng là `tool`** (để xử lý phản hồi từ việc gọi công cụ, ví dụ như của OpenCode Agent):
+   - Converter sẽ gom toàn bộ các tin nhắn có role là `"tool"` liên tiếp ở cuối cuộc hội thoại (từ tin nhắn cuối cùng ngược lên cho đến khi gặp tin nhắn không phải role `"tool"`).
+   - Chuỗi các tin nhắn `"tool"` liên tiếp này sẽ được gộp lại để tạo thành một `CurrentMessage` duy nhất chứa các `ToolResults`.
+   - Phần hội thoại trước đó (bao gồm cả tin nhắn `assistant` chứa yêu cầu gọi công cụ tương ứng) được giữ nguyên trong `History`.
+   - **Tác dụng**: Cơ chế này giúp khắc phục triệt để lỗi vòng lặp vô hạn (infinite exploration loop) của Agent khi không ghép cặp được tin nhắn phản hồi của công cụ với lượt truy vấn, giúp Agent tiếp tục suy luận chính xác trên kết quả công cụ nhận được.
 
 ### Assistant response collapse
 
@@ -226,33 +236,33 @@ for _, id := range droppedIDs {
 
 ---
 
-## Smart Model Normalization
+## Chuẩn hóa Model thông minh (Smart Model Normalization)
 
-Truoc khi mapping, model name duoc normalize de xu ly cac dinh dang khong nhat quan tu client:
+Trước khi thực hiện ánh xạ (mapping), tên model nhận được từ client sẽ được chuẩn hóa để xử lý các định dạng không nhất quán:
 
-- Strip prefix sau `/` (vi du `kiro/claude-sonnet-4-6` → `claude-sonnet-4-6`).
-- Fix separators: `4-6` → `4.6`, `_` → `-`.
-- Case insensitive: `Claude-Sonnet-4.6` → `claude-sonnet-4.6`.
+- Loại bỏ tiền tố sau ký tự `/` (ví dụ `kiro/claude-sonnet-4-6` → `claude-sonnet-4-6`).
+- Điều chỉnh dấu phân cách: chuyển `4-6` thành `4.6`, `_` thành `-`.
+- Không phân biệt chữ hoa chữ thường: `Claude-Sonnet-4.6` → `claude-sonnet-4.6`.
 
-Vi du:
+Ví dụ cụ thể:
 
-| Input | Sau normalize |
-|-------|---------------|
+| Tên đầu vào từ Client | Sau khi chuẩn hóa |
+|-----------------------|-------------------|
 | `kiro/claude-sonnet-4-6` | `claude-sonnet-4.6` |
 | `claude_sonnet_4_6` | `claude-sonnet-4.6` |
 | `Claude-Opus-4-7` | `claude-opus-4.7` |
 
-## Single mapping point
+## Điểm ánh xạ duy nhất (Single mapping point)
 
-Chi co `kiro.Dispatcher` thuc hien model mapping. Cac handler (Anthropic, OpenAI) va converter khong duplicate logic mapping. Dieu nay dam bao:
+Chỉ có `kiro.Dispatcher` chịu trách nhiệm thực hiện ánh xạ model (model mapping). Các handler API (Anthropic, OpenAI) và bộ converter trung gian không bị trùng lặp logic này. Điều này đảm bảo:
 
-- Mot diem sua duy nhat khi them model moi.
-- Khong co inconsistency giua cac API surfaces.
-- Fallback chains duoc xu ly o mot noi.
+- Chỉ có một nơi duy nhất cần sửa đổi khi bổ sung model mới.
+- Loại bỏ hoàn toàn sự không nhất quán giữa các giao diện API.
+- Chuỗi dự phòng (fallback chains) được xử lý đồng bộ tại một đầu mối duy nhất.
 
-## Model mapping
+## Ánh xạ Model (Model mapping)
 
-`MapModel` là hàm table-driven trong `internal/kiro/types.go`:
+Hàm `MapModel` được triển khai dưới dạng bảng (table-driven) trong tệp `internal/kiro/types.go`:
 
 ```go
 func MapModel(input string) string {
@@ -281,8 +291,8 @@ func MapModel(input string) string {
 }
 ```
 
-| Alias | Kết quả |
-|-------|---------|
+| Bí danh (Alias) | Kết quả ánh xạ |
+|-----------------|-----------------|
 | `sonnet` | `claude-sonnet-4.6` |
 | `opus` | `claude-opus-4.7` |
 | `haiku` | `claude-haiku-4.5` |
@@ -293,24 +303,24 @@ func MapModel(input string) string {
 | `opus-4.7` / `claude-opus-4.7` | `claude-opus-4.7` |
 | `haiku-4.5` / `claude-haiku-4.5` | `claude-haiku-4.5` |
 
-Nếu input không khớp bất kỳ case nào, trả về nguyên input (passthrough).
+Nếu tên model đầu vào không khớp bất kỳ điều kiện nào ở trên, nó sẽ được chuyển thẳng lên upstream mà không thay đổi (passthrough).
 
-## Reliability Pipeline (truoc khi gui Kiro)
+## Đường ống Độ tin cậy (Reliability Pipeline - Trước khi gửi lên Kiro)
 
-Truoc khi gui request den Kiro, payload di qua 3 buoc reliability:
+Trước khi gửi dữ liệu payload cuối cùng tới Kiro, payload sẽ đi qua 3 bước bảo vệ độ tin cậy nghiêm ngặt:
 
-### 1. JSON Schema Normalization
+### 1. Chuẩn hóa JSON Schema (JSON Schema Normalization)
 
-- Fix `required: null` → xoa field `required`.
-- Fix `properties: null` → thay bang `{}`.
-- Xoa `additionalProperties` (Kiro khong ho tro).
+- Sửa lỗi `required: null` → tự động xóa trường `required`.
+- Sửa lỗi `properties: null` → thay thế bằng `{}`.
+- Loại bỏ trường `additionalProperties` (do Kiro không hỗ trợ cấu trúc này).
 
-### 2. Tool Name Shortening
+### 2. Rút gọn tên Công cụ (Tool Name Shortening)
 
-Ten tool > 63 ky tu se bi rut ngan thanh 54-ky tu prefix + `_` + 8-ky tu SHA256 hash. Ten goc duoc restore khi nhan response.
+Các công cụ có tên dài vượt quá **63 ký tự** sẽ tự động được rút gọn thành định dạng: `54 ký tự đầu` + `_` + `8 ký tự mã hóa SHA256`. Tên gốc của công cụ sẽ được tự động khôi phục lại khi nhận phản hồi từ Kiro để trả về cho client.
 
-Vi du: `very_long_tool_name_that_exceeds_sixty_three_characters_limit` → `very_long_tool_name_that_exceeds_sixty_three_char_abc123de`
+*Ví dụ*: `very_long_tool_name_that_exceeds_sixty_three_characters_limit` → `very_long_tool_name_that_exceeds_sixty_three_char_abc123de`
 
-### 3. Payload Size Guard
+### 3. Bộ lọc kích thước Payload (Payload Size Guard)
 
-Neu payload > 600KB, he thong tu dong trim cac cap history cu nhat (oldest user/assistant pairs) cho den khi duoi nguong. Dieu nay ngan chan request bi reject vi qua lon ma khong mat context gan nhat.
+Nếu tổng dung lượng payload vượt quá **600KB**, hệ thống sẽ tự động lọc bỏ các cặp hội thoại cũ nhất (oldest user/assistant pairs) trong lịch sử cho tới khi dung lượng giảm xuống dưới ngưỡng. Điều này giúp ngăn ngừa việc yêu cầu bị từ chối từ máy chủ Kiro do vượt quá giới hạn băng thông mà vẫn bảo toàn tối đa ngữ cảnh hội thoại gần nhất.

@@ -100,17 +100,29 @@ Không có validation nào khác được thực hiện trong `Validate()`. Các
 
 ## Example configs
 
-File cấu hình mẫu: [configs/config.example.json](../../configs/config.example.json)
+File cấu hình mẫu tĩnh (Tối giản): [configs/config.example.json](../../configs/config.example.json)
 
 ```json
 {
-  "server": { "host": "0.0.0.0", "port": 8765, "admin_api_key": "REPLACE_ME_ADMIN", "proxy_api_key": "REPLACE_ME_PROXY" },
-  "kiro": { "region": "us-east-1", "auth_region": "us-east-1", "api_region": "us-east-1" },
-  "storage": { "sqlite_path": ".data/kiro.db", "credentials_json_path": "" },
-  "load_balancer": { "strategy": "round_robin", "sticky_session": true },
-  "quota": { "cache_ttl_seconds": 43200 },
-  "failover": { "base_cooldown_sec": 60, "max_backoff_multiplier": 1440, "probabilistic_retry_chance": 0.10, "max_attempts": 9 },
-  "logging": { "level": "info", "format": "json" }
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "admin_api_key": "REPLACE_ME_ADMIN",
+    "proxy_api_key": "REPLACE_ME_PROXY"
+  },
+  "kiro": {
+    "region": "us-east-1",
+    "auth_region": "us-east-1",
+    "api_region": "us-east-1"
+  },
+  "storage": {
+    "sqlite_path": ".data/kiro.db",
+    "credentials_json_path": ""
+  },
+  "logging": {
+    "level": "info",
+    "format": "json"
+  }
 }
 ```
 
@@ -123,17 +135,47 @@ File credentials mẫu dùng cho watcher: [configs/credentials.example.json](../
 ]
 ```
 
-## Dynamic Config (DB-backed, hot-reload)
+## Cấu hình động (Dynamic Config - SQLite DB, Hot-Reload)
 
-Cấu hình động được lưu trong bảng `settings` trong SQLite dưới dạng key-value.
+Để tăng tính linh hoạt và giảm thiểu rủi ro khi thay đổi cấu hình, toàn bộ các cấu hình hoạt động và suy luận được tách khỏi file JSON tĩnh và lưu trữ trong bảng `settings` của cơ sở dữ liệu SQLite dưới dạng key-value.
 
-- Seed từ JSON file lần đầu, sau đó DB là source of truth
-- Các fields: `strategy`, `sticky_session`, `base_cooldown_sec`, `max_backoff_multiplier`, `probabilistic_retry_chance`, `max_attempts`, `cache_ttl_seconds`, `model_mappings`
-- API: `GET /admin/settings`, `PUT /admin/settings`
-- Hot-reload: components đọc `DynamicConfig.Get()` mỗi request (`RWMutex`, chi phí rất thấp)
-- Admin UI: tab Settings cho phép edit trực tiếp
+- **Khởi tạo (Seeding)**: Khi cơ sở dữ liệu trống, hệ thống sẽ tự động gieo dữ liệu mặc định an toàn thông qua hàm `SeedFromStatic(cfg)` tại thời điểm khởi chạy. Từ các lần sau, Database đóng vai trò là **Source of Truth** (Nguồn chân lý duy nhất).
+- **Cơ chế Hot-Reload**: Các thành phần hệ thống đọc cấu hình mới nhất qua phương thức `DynamicConfig.Get()` ở mỗi request. Sử dụng khóa đọc/ghi `sync.RWMutex` giúp chi phí tài nguyên cực kỳ thấp, cập nhật tức thì mà không cần khởi động lại máy chủ.
+- **Quản lý trực quan**: Hỗ trợ xem và cập nhật trực tiếp qua giao diện **Admin UI** (Tab Settings).
 
-## Model Mappings config format
+### Các trường cấu hình động chính:
+
+| Nhóm | Khóa cấu hình | Kiểu dữ liệu | Mặc định | Mô tả |
+|------|---------------|--------------|----------|-------|
+| **Load Balancer** | `strategy` | `string` | `"round_robin"` | Chiến lược cân bằng tải: `round_robin`, `balanced`, hoặc `most_quota`. |
+| | `sticky_session` | `bool` | `true` | Duy trì cùng một tài khoản Kiro cho các lượt gửi tiếp theo trong cùng hội thoại. |
+| **Circuit Breaker** | `base_cooldown_sec` | `int` | `60` | Thời gian hồi chiêu ban đầu (giây) của tài khoản khi lỗi. |
+| | `max_backoff_multiplier` | `int` | `1440` | Hệ số nhân hồi chiêu tối đa. |
+| | `probabilistic_retry_chance` | `float64` | `0.10` | Xác suất thử lại tài khoản đang hồi chiêu (0.0 đến 1.0). |
+| | `max_attempts` | `int` | `9` | Số lần thử lại tối đa cho mỗi lượt gửi trước khi báo lỗi. |
+| **Inference (Suy luận)**| `web_search_enabled` | `bool` | `false` | Bật/tắt tính năng Web Search của Kiro. |
+| | `first_token_timeout_sec` | `int` | `15` | Giới hạn thời gian (giây) nhận token đầu tiên. |
+| | `first_token_max_retries` | `int` | `3` | Số lần thử lại tối đa khi quá thời gian nhận token đầu tiên. |
+| | `streaming_read_timeout_sec` | `int` | `300` | Giới hạn thời gian (giây) đọc luồng stream. |
+| | `truncation_recovery_enabled` | `bool` | `true` | Tự động phục hồi khi hội thoại bị cắt bớt do quá giới hạn context. |
+| | `fake_reasoning_enabled` | `bool` | `true` | Mô phỏng suy luận sâu (Fake Reasoning) bằng cách chèn thẻ suy nghĩ. |
+| | `fake_reasoning_max_tokens` | `int` | `1024` | Giới hạn token tối đa cho phần suy nghĩ mô phỏng. |
+| | `fake_reasoning_budget_cap` | `int` | `0` | Giới hạn ngân sách token tối đa cho phần suy nghĩ. |
+| **Quota Cache** | `cache_ttl_seconds` | `int` | `43200` | Thời gian lưu cache hạn ngạch (giây). |
+| **Mappings** | `model_mappings` | `json` | `[]` | Mảng chứa các quy tắc ánh xạ model từ client sang model Kiro. |
+
+---
+
+## Trình tạo cấu hình OpenCode (OpenCode Config Generator)
+
+Để hỗ trợ OpenCode Agent tích hợp tối ưu và tránh lỗi lặp vòng lặp suy luận, Admin UI cung cấp tab **OpenCode Config**:
+- Tự động phát hiện và sinh tệp cấu hình `config.json` tiêu chuẩn cho OpenCode Agent.
+- Widget sao chép model thông minh, loại bỏ các thuộc tính không cần thiết (như `"family"`) tránh xung đột.
+- Hướng dẫn cài đặt tệp cấu hình chi tiết cho các hệ điều hành (macOS, Linux, Windows).
+
+---
+
+## Cấu trúc Quy tắc Ánh xạ Model (Model Mappings)
 
 ```json
 {
@@ -147,9 +189,8 @@ Cấu hình động được lưu trong bảng `settings` trong SQLite dưới d
 }
 ```
 
-Các rule types:
-
-- `replace` — 1:1 mapping, thay thế source model bằng target model
-- `alias` — Giữ nguyên, source và target là cùng một model
-- `loadbalance` — Weighted round-robin phân phối request giữa nhiều target models
+Các kiểu quy tắc (`rule_type`):
+- `replace` — Ánh xạ 1:1, thay thế hoàn toàn model nguồn bằng model đích.
+- `alias` — Giữ nguyên model, coi tên nguồn và đích là bí danh của nhau.
+- `loadbalance` — Phân phối tải yêu cầu giữa nhiều model đích theo tỷ lệ trọng số (`weights`).
 ```

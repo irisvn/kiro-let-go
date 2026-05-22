@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
+import { Logo } from '@/components/Logo'
 
 const navItems = [
   { to: '/admin/ui/accounts', label: 'Accounts' },
@@ -24,7 +25,7 @@ export function Layout() {
     <div className="min-h-screen flex flex-col">
       <nav className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-6">
-          <span className="text-lg font-bold text-white tracking-tight">kiro-let-go</span>
+          <Logo />
           <div className="flex gap-1">
             {navItems.map((item) => (
               <NavLink

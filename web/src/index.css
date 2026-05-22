@@ -87,3 +87,13 @@ body {
   outline: none;
   box-shadow: 0 0 0 1px #6366f1;
 }
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 20s linear infinite;
+}
