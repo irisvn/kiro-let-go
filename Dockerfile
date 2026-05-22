@@ -7,7 +7,8 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build Go backend
-FROM golang:1.22-alpine AS backend-builder
+FROM golang:alpine AS backend-builder
+ENV GOTOOLCHAIN=auto
 WORKDIR /app
 
 # Khai báo build argument cho Version (mặc định là prod nếu không truyền)
