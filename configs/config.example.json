@@ -1,14 +1,21 @@
 {
-  "server": { "host": "0.0.0.0", "port": 8765, "admin_api_key": "REPLACE_ME_ADMIN", "proxy_api_key": "REPLACE_ME_PROXY" },
-  "kiro": { "region": "us-east-1", "auth_region": "us-east-1", "api_region": "us-east-1" },
-  "storage": { "sqlite_path": ".data/kiro.db", "credentials_json_path": "" },
-  "load_balancer": { "strategy": "round_robin", "sticky_session": true },
-  "quota": { "cache_ttl_seconds": 43200 },
-  "failover": { "base_cooldown_sec": 60, "max_backoff_multiplier": 1440, "probabilistic_retry_chance": 0.10, "max_attempts": 9 },
-  "logging": { "level": "info", "format": "json" },
-  "model_mappings": [
-    { "id": "gpt4-to-sonnet", "name": "GPT-4 → Sonnet", "enabled": true, "rule_type": "replace", "source_model": "gpt-4", "target_models": ["claude-sonnet-4.6"] },
-    { "id": "gpt4o-to-sonnet", "name": "GPT-4o → Sonnet", "enabled": true, "rule_type": "replace", "source_model": "gpt-4o", "target_models": ["claude-sonnet-4.6"] },
-    { "id": "gpt4o-mini-to-haiku", "name": "GPT-4o-mini → Haiku", "enabled": true, "rule_type": "replace", "source_model": "gpt-4o-mini", "target_models": ["claude-haiku-4.5"] }
-  ]
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "admin_api_key": "REPLACE_ME_ADMIN",
+    "proxy_api_key": "REPLACE_ME_PROXY"
+  },
+  "kiro": {
+    "region": "us-east-1",
+    "auth_region": "us-east-1",
+    "api_region": "us-east-1"
+  },
+  "storage": {
+    "sqlite_path": ".data/kiro.db",
+    "credentials_json_path": ""
+  },
+  "logging": {
+    "level": "info",
+    "format": "json"
+  }
 }

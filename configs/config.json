@@ -1,9 +1,22 @@
 {
-  "server": { "host": "0.0.0.0", "port": 8765, "admin_api_key": "REPLACE_ME_ADMIN", "proxy_api_key": "REPLACE_ME_PROXY" },
-  "kiro": { "region": "us-east-1", "auth_region": "us-east-1", "api_region": "us-east-1" },
-  "storage": { "sqlite_path": ".data/kiro.db", "credentials_json_path": "" },
-  "load_balancer": { "strategy": "round_robin", "sticky_session": true },
-  "quota": { "cache_ttl_seconds": 1800 },
-  "failover": { "base_cooldown_sec": 10, "max_backoff_multiplier": 1440, "probabilistic_retry_chance": 0.10, "max_attempts": 9 },
-  "logging": { "level": "info", "format": "json", "request_log_file": ".data/request_log.jsonl" }
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "admin_api_key": "REPLACE_ME_ADMIN",
+    "proxy_api_key": "REPLACE_ME_PROXY"
+  },
+  "kiro": {
+    "region": "us-east-1",
+    "auth_region": "us-east-1",
+    "api_region": "us-east-1"
+  },
+  "storage": {
+    "sqlite_path": ".data/kiro.db",
+    "credentials_json_path": ""
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "request_log_file": ".data/request_log.jsonl"
+  }
 }
