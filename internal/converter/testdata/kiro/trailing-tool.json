@@ -1,0 +1,67 @@
+{
+  "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
+    "agentContinuationId": "00000000-0000-4000-8000-000000000002",
+    "chatTriggerType": "MANUAL",
+    "currentMessage": {
+      "userInputMessage": {
+        "content": "",
+        "modelId": "claude-sonnet-4.5",
+        "origin": "AI_EDITOR",
+        "userInputMessageContext": {
+          "tools": [
+            {
+              "toolSpecification": {
+                "name": "glob",
+                "description": "Glob files",
+                "inputSchema": {
+                  "json": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          ],
+          "toolResults": [
+            {
+              "toolUseId": "call_glob",
+              "content": [
+                {
+                  "text": "file1.txt, file2.txt"
+                }
+              ],
+              "status": "success"
+            }
+          ]
+        }
+      }
+    },
+    "history": [
+      {
+        "userInputMessage": {
+          "content": "Find files",
+          "modelId": "claude-sonnet-4.5",
+          "origin": "AI_EDITOR"
+        }
+      },
+      {
+        "assistantResponseMessage": {
+          "content": "Let me search",
+          "toolUses": [
+            {
+              "toolUseId": "call_glob",
+              "name": "glob",
+              "input": {
+                "pattern": "*"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "inferenceConfiguration": {
+      "maxOutputTokens": 64000
+    }
+  },
+  "profileArn": "arn:aws:kiro:test-profile"
+}

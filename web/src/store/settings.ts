@@ -34,6 +34,11 @@ export interface DynamicSettings {
 export interface AvailableModel {
   model_id: string
   model_name: string
+  supported_input_types?: string[]
+  token_limits?: {
+    max_input_tokens: number
+    max_output_tokens: number
+  }
 }
 
 interface SettingsState {

@@ -1,11 +1,13 @@
 {
   "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
     "chatTriggerType": "MANUAL",
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "\u003cthinking_mode\u003eextended\u003c/thinking_mode\u003e\u003cmax_thinking_length\u003e8000\u003c/max_thinking_length\u003eLook now",
+        "modelId": "claude-sonnet-4.5",
+        "origin": "AI_EDITOR",
         "images": [
           {
             "format": "png",
@@ -13,10 +15,11 @@
               "bytes": "aGVsbG8="
             }
           }
-        ],
-        "modelId": "claude-sonnet-4.5",
-        "origin": "AI_EDITOR"
+        ]
       }
+    },
+    "inferenceConfiguration": {
+      "maxOutputTokens": 64000
     }
   },
   "profileArn": "arn:aws:kiro:test-profile"

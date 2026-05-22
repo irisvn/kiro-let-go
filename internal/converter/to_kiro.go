@@ -18,18 +18,46 @@ func NormalizedToKiro(req *NormalizedRequest, profileArn string) (*kiro.KiroPayl
 		return nil, fmt.Errorf("normalized request is nil")
 	}
 
-	lastUser := lastUserMessageIndex(req.Messages)
-	if lastUser == -1 {
-		return nil, fmt.Errorf("normalized request has no user message")
+	n := len(req.Messages)
+	if n == 0 {
+		return nil, fmt.Errorf("normalized request has no messages")
 	}
 
-	history, err := buildKiroHistory(req.Messages[:lastUser], req.Model)
-	if err != nil {
-		return nil, err
-	}
-	current, err := buildCurrentKiroMessage(req, req.Messages[lastUser], req.Model)
-	if err != nil {
-		return nil, err
+	var history []kiro.HistoryItem
+	var current kiro.CurrentMessage
+	var err error
+
+	// Nếu tin nhắn cuối cùng là tool, chúng ta gộp tất cả các tin nhắn tool liên tiếp ở cuối vào CurrentMessage
+	if req.Messages[n-1].Role == "tool" {
+		firstToolIdx := n - 1
+		for firstToolIdx >= 0 && req.Messages[firstToolIdx].Role == "tool" {
+			firstToolIdx--
+		}
+		firstToolIdx++ // trỏ vào tin nhắn tool đầu tiên trong chuỗi tool liên tiếp ở cuối
+
+		history, err = buildKiroHistory(req.Messages[:firstToolIdx], req.Model)
+		if err != nil {
+			return nil, err
+		}
+
+		current, err = buildCurrentKiroMessageFromTools(req, req.Messages[firstToolIdx:], req.Model)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		lastUser := lastUserMessageIndex(req.Messages)
+		if lastUser == -1 {
+			return nil, fmt.Errorf("normalized request has no user message")
+		}
+
+		history, err = buildKiroHistory(req.Messages[:lastUser], req.Model)
+		if err != nil {
+			return nil, err
+		}
+		current, err = buildCurrentKiroMessage(req, req.Messages[lastUser], req.Model)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cleanHistory, cleanCurrent, droppedIDs := validatePairing(history, current)
@@ -39,15 +67,62 @@ func NormalizedToKiro(req *NormalizedRequest, profileArn string) (*kiro.KiroPayl
 
 	prependSystemPrompt(cleanHistory, &cleanCurrent, req.SystemPrompt)
 
+	maxOutput := req.MaxOutputTokens
+	if maxOutput <= 0 {
+		maxOutput = 64000 // sensible default matching Kiro's standard model limit
+	}
+
 	return &kiro.KiroPayload{
 		ConversationState: kiro.ConversationState{
 			ConversationID:  uuid.NewString(),
 			ChatTriggerType: "MANUAL",
 			CurrentMessage:  cleanCurrent,
 			History:         cleanHistory,
+			InferenceConfig: &kiro.InferenceConfig{
+				MaxOutputTokens: maxOutput,
+			},
 		},
 		ProfileArn: profileArn,
 	}, nil
+}
+
+func buildCurrentKiroMessageFromTools(req *NormalizedRequest, toolMsgs []NormalizedMessage, model string) (kiro.CurrentMessage, error) {
+	var results []kiro.ToolResult
+	for _, msg := range toolMsgs {
+		for _, part := range msg.Parts {
+			if p, ok := part.(ToolResult); ok {
+				status := "success"
+				if p.IsError {
+					status = "error"
+				}
+				results = append(results, kiro.ToolResult{
+					ToolUseID: p.ToolUseID,
+					Content:   []kiro.ToolResultContent{{Text: p.ContentText}},
+					Status:    status,
+				})
+			}
+		}
+	}
+
+	tools, err := kiroTools(req.Tools)
+	if err != nil {
+		return kiro.CurrentMessage{}, err
+	}
+
+	var ctx *kiro.UserInputMessageContext
+	if len(tools) > 0 || len(results) > 0 {
+		ctx = &kiro.UserInputMessageContext{
+			Tools:       tools,
+			ToolResults: results,
+		}
+	}
+
+	return kiro.CurrentMessage{UserInputMessage: kiro.UserInputMessage{
+		Content:                 "",
+		ModelID:                 model,
+		Origin:                  "AI_EDITOR",
+		UserInputMessageContext: ctx,
+	}}, nil
 }
 
 func prependSystemPrompt(history []kiro.HistoryItem, current *kiro.CurrentMessage, systemPrompt string) {

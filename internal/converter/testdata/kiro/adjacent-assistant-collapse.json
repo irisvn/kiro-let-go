@@ -1,8 +1,8 @@
 {
   "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
     "chatTriggerType": "MANUAL",
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "continue",
@@ -16,16 +16,16 @@
           "content": "FirstSecond",
           "toolUses": [
             {
-              "input": {},
+              "toolUseId": "call_a",
               "name": "a",
-              "toolUseId": "call_a"
+              "input": {}
             },
             {
+              "toolUseId": "call_b",
+              "name": "b",
               "input": {
                 "x": 1
-              },
-              "name": "b",
-              "toolUseId": "call_b"
+              }
             }
           ]
         }
@@ -36,28 +36,31 @@
           "userInputMessageContext": {
             "toolResults": [
               {
+                "toolUseId": "call_a",
                 "content": [
                   {
                     "text": "A"
                   }
                 ],
-                "status": "success",
-                "toolUseId": "call_a"
+                "status": "success"
               },
               {
+                "toolUseId": "call_b",
                 "content": [
                   {
                     "text": "B"
                   }
                 ],
-                "status": "success",
-                "toolUseId": "call_b"
+                "status": "success"
               }
             ]
           }
         }
       }
-    ]
+    ],
+    "inferenceConfiguration": {
+      "maxOutputTokens": 64000
+    }
   },
   "profileArn": "arn:aws:kiro:test-profile"
 }

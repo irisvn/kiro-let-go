@@ -1,8 +1,8 @@
 {
   "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
     "chatTriggerType": "MANUAL",
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "done?",
@@ -16,9 +16,9 @@
           "content": "(empty placeholder)",
           "toolUses": [
             {
-              "input": {},
+              "toolUseId": "paired",
               "name": "ok",
-              "toolUseId": "paired"
+              "input": {}
             }
           ]
         }
@@ -29,19 +29,22 @@
           "userInputMessageContext": {
             "toolResults": [
               {
+                "toolUseId": "paired",
                 "content": [
                   {
                     "text": "ok"
                   }
                 ],
-                "status": "success",
-                "toolUseId": "paired"
+                "status": "success"
               }
             ]
           }
         }
       }
-    ]
+    ],
+    "inferenceConfiguration": {
+      "maxOutputTokens": 64000
+    }
   },
   "profileArn": "arn:aws:kiro:test-profile"
 }

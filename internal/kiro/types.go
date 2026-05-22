@@ -82,12 +82,18 @@ type KiroPayload struct {
 }
 
 type ConversationState struct {
-	ConversationID      string         `json:"conversationId"`
-	AgentContinuationID string         `json:"agentContinuationId,omitempty"`
-	AgentTaskType       string         `json:"agentTaskType,omitempty"`
-	ChatTriggerType     string         `json:"chatTriggerType,omitempty"`
-	CurrentMessage      CurrentMessage `json:"currentMessage"`
-	History             []HistoryItem  `json:"history,omitempty"`
+	ConversationID      string           `json:"conversationId"`
+	AgentContinuationID string           `json:"agentContinuationId,omitempty"`
+	AgentTaskType       string           `json:"agentTaskType,omitempty"`
+	ChatTriggerType     string           `json:"chatTriggerType,omitempty"`
+	CurrentMessage      CurrentMessage   `json:"currentMessage"`
+	History             []HistoryItem    `json:"history,omitempty"`
+	InferenceConfig     *InferenceConfig `json:"inferenceConfiguration,omitempty"`
+}
+
+// InferenceConfig configures inference parameters for the Kiro upstream API.
+type InferenceConfig struct {
+	MaxOutputTokens int `json:"maxOutputTokens,omitempty"`
 }
 
 type CurrentMessage struct {

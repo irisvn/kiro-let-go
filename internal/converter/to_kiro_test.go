@@ -63,6 +63,19 @@ func TestNormalizedToKiroFixtures(t *testing.T) {
 				{Role: "user", Parts: []NormalizedPart{Text{Text: "done?"}}},
 			},
 		}},
+		{name: "trailing-tool", req: &NormalizedRequest{
+			Model: "claude-sonnet-4.5",
+			Tools: []NormalizedTool{{
+				Name:        "glob",
+				Description: "Glob files",
+				SchemaJSON:  `{"type":"object"}`,
+			}},
+			Messages: []NormalizedMessage{
+				{Role: "user", Parts: []NormalizedPart{Text{Text: "Find files"}}},
+				{Role: "assistant", Parts: []NormalizedPart{Text{Text: "Let me search"}, ToolUse{ID: "call_glob", Name: "glob", InputJSON: `{"pattern":"*"}`}}},
+				{Role: "tool", Parts: []NormalizedPart{ToolResult{ToolUseID: "call_glob", ContentText: "file1.txt, file2.txt", IsError: false}}},
+			},
+		}},
 	}
 
 	for _, tt := range tests {

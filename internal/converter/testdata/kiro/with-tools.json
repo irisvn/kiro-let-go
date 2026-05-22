@@ -1,8 +1,8 @@
 {
   "conversationState": {
+    "conversationId": "00000000-0000-4000-8000-000000000001",
     "agentContinuationId": "00000000-0000-4000-8000-000000000002",
     "chatTriggerType": "MANUAL",
-    "conversationId": "00000000-0000-4000-8000-000000000001",
     "currentMessage": {
       "userInputMessage": {
         "content": "Thanks",
@@ -12,9 +12,11 @@
           "tools": [
             {
               "toolSpecification": {
+                "name": "get_weather",
                 "description": "Get current weather",
                 "inputSchema": {
                   "json": {
+                    "type": "object",
                     "properties": {
                       "location": {
                         "type": "string"
@@ -22,11 +24,9 @@
                     },
                     "required": [
                       "location"
-                    ],
-                    "type": "object"
+                    ]
                   }
-                },
-                "name": "get_weather"
+                }
               }
             }
           ]
@@ -46,11 +46,11 @@
           "content": "Checking",
           "toolUses": [
             {
+              "toolUseId": "call_1",
+              "name": "get_weather",
               "input": {
                 "location": "Paris"
-              },
-              "name": "get_weather",
-              "toolUseId": "call_1"
+              }
             }
           ]
         }
@@ -61,19 +61,22 @@
           "userInputMessageContext": {
             "toolResults": [
               {
+                "toolUseId": "call_1",
                 "content": [
                   {
                     "text": "18C"
                   }
                 ],
-                "status": "success",
-                "toolUseId": "call_1"
+                "status": "success"
               }
             ]
           }
         }
       }
-    ]
+    ],
+    "inferenceConfiguration": {
+      "maxOutputTokens": 64000
+    }
   },
   "profileArn": "arn:aws:kiro:test-profile"
 }

@@ -8,6 +8,7 @@ import { QuotaPage } from '@/pages/QuotaPage'
 import { ProxyPage } from '@/pages/ProxyPage'
 import { RequestLogPage } from '@/pages/RequestLogPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { OpenCodeConfigPage } from '@/pages/OpenCodeConfigPage'
 import { HealthPage } from '@/pages/HealthPage'
 import { ToastContainer } from '@/components/Toast'
 
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="proxy" element={<ProxyPage />} />
           <Route path="logs" element={<RequestLogPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="opencode" element={<OpenCodeConfigPage />} />
           <Route path="health" element={<HealthPage />} />
         </Route>
       </Routes>

@@ -696,6 +696,12 @@ func normalizedToKiro(req *handlerNormalizedRequest, profileArn string) (*kiro.K
 
 	cleanHistory, cleanCurrent, _ := handlerValidatePairing(history, current)
 	prependSystemPrompt(cleanHistory, &cleanCurrent, req.SystemPrompt)
+
+	maxOutput := req.MaxOutputTokens
+	if maxOutput <= 0 {
+		maxOutput = 64000
+	}
+
 	return &kiro.KiroPayload{
 		ConversationState: kiro.ConversationState{
 			ConversationID:      uuid.NewString(),
@@ -704,6 +710,9 @@ func normalizedToKiro(req *handlerNormalizedRequest, profileArn string) (*kiro.K
 			ChatTriggerType:     "MANUAL",
 			CurrentMessage:      cleanCurrent,
 			History:             cleanHistory,
+			InferenceConfig: &kiro.InferenceConfig{
+				MaxOutputTokens: maxOutput,
+			},
 		},
 		ProfileArn: profileArn,
 	}, nil
