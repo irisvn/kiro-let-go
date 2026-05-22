@@ -60,7 +60,7 @@ func New(deps Deps) *Server {
 		middleware.LoggingMiddleware(deps.Logger),
 		middleware.RecoverMiddleware(deps.Logger),
 		middleware.CORSMiddleware(),
-		RequestLogMiddleware(requestLog),
+		RequestLogMiddleware(requestLog, deps.DynamicCfg),
 	)
 
 	r.GET("/health", func(c *gin.Context) {

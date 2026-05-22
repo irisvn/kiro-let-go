@@ -88,7 +88,10 @@ export function SettingsPage() {
       </div>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Load Balancer</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Load Balancer</h3>
+          <p className="text-xs text-slate-500 mt-1">Cách hệ thống phân phối request giữa các tài khoản. Strategy: round_robin (vòng tròn), balanced (ít dùng nhất), most_quota (quota nhiều nhất). Sticky session giữ cùng tài khoản cho conversation.</p>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Strategy">
             <select value={draft.strategy} onChange={(e) => patch({ strategy: e.target.value })} className="input">
@@ -100,7 +103,10 @@ export function SettingsPage() {
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Failover & Timeouts</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Failover & Timeouts</h3>
+          <p className="text-xs text-slate-500 mt-1">Circuit breaker tự động loại bỏ tài khoản lỗi. Base cooldown: thời gian chờ sau fail. Max backoff: hệ số nhân tối đa. Retry chance: xác suất thử lại tài khoản bị block (0.1 = 10%).</p>
+        </div>
         <div className="grid gap-4 md:grid-cols-4">
           <NumberField label="Base cooldown (sec)" value={draft.base_cooldown_sec} onChange={(v) => patch({ base_cooldown_sec: v })} />
           <NumberField label="Max backoff multiplier" value={draft.max_backoff_multiplier} onChange={(v) => patch({ max_backoff_multiplier: v })} />
@@ -115,14 +121,20 @@ export function SettingsPage() {
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">MCP Web Search</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">MCP Web Search</h3>
+          <p className="text-xs text-slate-500 mt-1">Cho phép AI search web qua MCP API để lấy thông tin real-time từ internet (cần cấu hình MCP server).</p>
+        </div>
         <div className="flex items-center gap-4">
           <Toggle label="Enable Web Search via MCP API" checked={draft.web_search_enabled} onChange={(v) => patch({ web_search_enabled: v })} />
         </div>
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Extended Thinking (Fake Reasoning)</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Extended Thinking (Fake Reasoning)</h3>
+          <p className="text-xs text-slate-500 mt-1">Giả lập thinking mode - AI suy nghĩ (trong &lt;thinking&gt; tags) trước khi trả lời. Max tokens: giới hạn độ dài thinking. Budget cap: tổng token cho thinking trong request.</p>
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <div className="flex items-center">
             <Toggle label="Enable Extended Thinking Mode" checked={draft.fake_reasoning_enabled} onChange={(v) => patch({ fake_reasoning_enabled: v })} />
@@ -133,20 +145,39 @@ export function SettingsPage() {
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Truncation Recovery</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Truncation Recovery</h3>
+          <p className="text-xs text-slate-500 mt-1">Tự động phát hiện và thông báo khi response bị cắt ngắn do vượt quá giới hạn. Giúp client biết cần request tiếp.</p>
+        </div>
         <div className="flex items-center gap-4">
           <Toggle label="Enable Truncation Recovery & Notices" checked={draft.truncation_recovery_enabled} onChange={(v) => patch({ truncation_recovery_enabled: v })} />
         </div>
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Quota</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Quota</h3>
+          <p className="text-xs text-slate-500 mt-1">Cache quota data để giảm số lần gọi API kiểm tra quota. TTL mặc định: 43200s (12 giờ).</p>
+        </div>
         <NumberField label="Cache TTL (seconds)" value={draft.cache_ttl_seconds} onChange={(v) => patch({ cache_ttl_seconds: v })} />
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Logging</h3>
+          <p className="text-xs text-slate-500 mt-1">Cấu hình ghi logs của hệ thống. Khi tắt, hệ thống sẽ thực sự ngừng ghi logs của các request proxy để tránh tiêu hao tài nguyên ổ đĩa.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Toggle label="Bật ghi Request Logs" checked={draft.request_log_enabled} onChange={(v) => patch({ request_log_enabled: v })} />
+        </div>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Model Mappings</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Model Mappings</h3>
+            <p className="text-xs text-slate-500 mt-1">Map model từ client sang model khác ở upstream. Replace: thay thế 1-1. Alias: tên gọi khác. Loadbalance: phân phối giữa nhiều model với trọng số.</p>
+          </div>
           <button onClick={() => patch({ model_mappings: [...draft.model_mappings, emptyRule()] })} className="bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg px-3 py-1.5">Add rule</button>
         </div>
         <div className="space-y-3">

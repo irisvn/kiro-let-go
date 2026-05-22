@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/irisvn/kiro-let-go/internal/api/admin"
+	"github.com/irisvn/kiro-let-go/internal/config"
 	"github.com/irisvn/kiro-let-go/internal/kiro"
 )
 
@@ -200,8 +201,13 @@ func (rl *RequestLog) Clear() {
 	}
 }
 
-func RequestLogMiddleware(rl *RequestLog) gin.HandlerFunc {
+func RequestLogMiddleware(rl *RequestLog, dc *config.DynamicConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if dc != nil && !dc.Get().RequestLogEnabled {
+			c.Next()
+			return
+		}
+
 		path := c.Request.URL.Path
 		shouldLog := strings.HasPrefix(path, "/v1/") || strings.Contains(path, "/chat-test") || strings.Contains(path, "/test")
 		if rl == nil || !shouldLog {

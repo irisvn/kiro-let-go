@@ -29,6 +29,7 @@ export interface DynamicSettings {
   fake_reasoning_enabled: boolean
   fake_reasoning_max_tokens: number
   fake_reasoning_budget_cap: number
+  request_log_enabled: boolean
 }
 
 export interface AvailableModel {

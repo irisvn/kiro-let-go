@@ -20,6 +20,7 @@ const (
 	settingsKeyMaxAttempts              = "max_attempts"
 	settingsKeyCacheTTLSeconds          = "cache_ttl_seconds"
 	settingsKeyModelMappings            = "model_mappings"
+	settingsKeyRequestLogEnabled        = "request_log_enabled"
 
 	// New Ported settings from kiro-gateway
 	settingsKeyWebSearchEnabled          = "web_search_enabled"
@@ -63,6 +64,9 @@ type DynamicConfig struct {
 	FakeReasoningMaxTokens    int
 	FakeReasoningBudgetCap    int
 
+	// Request Logging
+	RequestLogEnabled bool
+
 	// Listeners (notified on change)
 	listeners []func()
 }
@@ -87,6 +91,9 @@ type DynamicSettings struct {
 	FakeReasoningEnabled      bool `json:"fake_reasoning_enabled"`
 	FakeReasoningMaxTokens    int  `json:"fake_reasoning_max_tokens"`
 	FakeReasoningBudgetCap    int  `json:"fake_reasoning_budget_cap"`
+
+	// Request Logging
+	RequestLogEnabled bool `json:"request_log_enabled"`
 }
 
 // NewDynamicConfig creates an empty dynamic config backed by db.
@@ -162,6 +169,7 @@ func (dc *DynamicConfig) SeedFromStatic(cfg *Config) error {
 		FakeReasoningEnabled:      true,
 		FakeReasoningMaxTokens:    1024,
 		FakeReasoningBudgetCap:    0,
+		RequestLogEnabled:         true,
 	}
 	return dc.Update(settings)
 }
@@ -191,6 +199,7 @@ func (dc *DynamicConfig) Get() DynamicSettings {
 		FakeReasoningEnabled:      dc.FakeReasoningEnabled,
 		FakeReasoningMaxTokens:    dc.FakeReasoningMaxTokens,
 		FakeReasoningBudgetCap:    dc.FakeReasoningBudgetCap,
+		RequestLogEnabled:         dc.RequestLogEnabled,
 	}
 }
 
@@ -294,6 +303,7 @@ func (dc *DynamicConfig) apply(settings DynamicSettings) {
 	dc.FakeReasoningEnabled = settings.FakeReasoningEnabled
 	dc.FakeReasoningMaxTokens = settings.FakeReasoningMaxTokens
 	dc.FakeReasoningBudgetCap = settings.FakeReasoningBudgetCap
+	dc.RequestLogEnabled = settings.RequestLogEnabled
 }
 
 func (dc *DynamicConfig) notify() {
@@ -323,6 +333,7 @@ func settingsFromRows(values map[string]string) (DynamicSettings, error) {
 	settings.FakeReasoningEnabled = parseBoolWithDefault(values[settingsKeyFakeReasoningEnabled], true)
 	settings.FakeReasoningMaxTokens = parseIntWithDefault(values[settingsKeyFakeReasoningMaxTokens], 1024)
 	settings.FakeReasoningBudgetCap = parseIntWithDefault(values[settingsKeyFakeReasoningBudgetCap], 0)
+	settings.RequestLogEnabled = parseBoolWithDefault(values[settingsKeyRequestLogEnabled], true)
 
 	if raw := strings.TrimSpace(values[settingsKeyModelMappings]); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &settings.ModelMappings); err != nil {
@@ -356,6 +367,7 @@ func rowsFromSettings(settings DynamicSettings) (map[string]string, error) {
 		settingsKeyFakeReasoningEnabled:      strconv.FormatBool(settings.FakeReasoningEnabled),
 		settingsKeyFakeReasoningMaxTokens:    strconv.Itoa(settings.FakeReasoningMaxTokens),
 		settingsKeyFakeReasoningBudgetCap:    strconv.Itoa(settings.FakeReasoningBudgetCap),
+		settingsKeyRequestLogEnabled:         strconv.FormatBool(settings.RequestLogEnabled),
 	}, nil
 }
 
